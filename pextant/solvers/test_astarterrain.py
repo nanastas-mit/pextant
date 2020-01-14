@@ -1,5 +1,5 @@
 from pextant.settings import explorer, DEM_AMES
-from astarMesh import astarSolver, MeshSearchElement
+from .astarMesh import astarSolver, MeshSearchElement
 
 env_model = DEM_AMES[50].loadSubSection()
 
@@ -8,4 +8,4 @@ h = solver.cost_function.cache_heuristic((50,50))
 solver.cost_function.setEndNode(MeshSearchElement(env_model.getMeshElement((100,100))))
 cost = solver.cost_function.getHeuristicCost(MeshSearchElement(env_model.getMeshElement((10,10))))
 
-print cost
+print(cost)

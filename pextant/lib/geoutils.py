@@ -1,4 +1,4 @@
-from geoshapely import GeoPolygon, GeoPoint, UTM, LAT_LONG, Cartesian
+from .geoshapely import GeoPolygon, GeoPoint, UTM, LAT_LONG, Cartesian
 import numpy as np
 from skimage.draw import circle
 
@@ -22,7 +22,7 @@ def filled_circle_old(ROW_COL, center, radius):
     bounds = GeoPolygon(UTM(center), *np.array(keepout.bounds).reshape([2, 2]).transpose()).to(XY)
 
     # generate bounding box mesh
-    range1 = lambda start, end: range(start, end + 1)
+    range1 = lambda start, end: list(range(start, end + 1))
     xrang, yrang = range1(*bounds[0]), range1(*bounds[1][::-1])
     xx, yy = np.meshgrid(xrang, yrang)
 

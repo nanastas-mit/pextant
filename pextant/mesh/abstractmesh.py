@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import numpy.matlib as matlib
 from pextant.lib.geoshapely import GeoPoint, GeoPolygon, GeoEnvelope, Cartesian, XY
@@ -237,7 +238,7 @@ class EnvironmentalModel(GeoMesh):
 
 class SearchKernel(object):
     def __init__(self, kernelrange = 3, type="square"):
-        searchvector = range(-(kernelrange / 2), kernelrange / 2 + 1)
+        searchvector = list(range(-math.floor(kernelrange / 2), math.floor(kernelrange / 2) + 1))
         col_off = matlib.repmat(searchvector, len(searchvector), 1)
         row_off = np.transpose(col_off)
         col_off_clean = np.delete(col_off.flatten(), (kernelrange**2 - 1)/2)

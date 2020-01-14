@@ -145,7 +145,7 @@ def get_DS_size_and_iters(requested_size, max_power_of_two=13):
     # failsafe: no values in the dimensions array were allowed, so print a warning and return
     # the maximum size.
     d = 2 ** max_power_of_two + 1
-    print("DiamondSquare Warning: Requested size was too large. Grid of size {0} returned""".format(d))
+    print(("DiamondSquare Warning: Requested size was too large. Grid of size {0} returned""".format(d)))
     return d, max_power_of_two
 
 
@@ -162,7 +162,7 @@ def diamond_step(DS_array, step_size, roughness):
 
     # calculate where all the diamond corners are (the ones we'll be filling)
     half_step = step_size / 2
-    x_steps = range(half_step, DS_array.shape[0], step_size)
+    x_steps = list(range(half_step, DS_array.shape[0], step_size))
     y_steps = x_steps[:]
 
     for i in x_steps:
@@ -192,12 +192,12 @@ def square_step(DS_array, step_size, roughness):
     half_step = step_size / 2
 
     # vertical step
-    steps_x_vert = range(half_step, DS_array.shape[0], step_size)
-    steps_y_vert = range(0, DS_array.shape[1], step_size)
+    steps_x_vert = list(range(half_step, DS_array.shape[0], step_size))
+    steps_y_vert = list(range(0, DS_array.shape[1], step_size))
 
     # horizontal step
-    steps_x_horiz = range(0, DS_array.shape[0], step_size)
-    steps_y_horiz = range(half_step, DS_array.shape[1], step_size)
+    steps_x_horiz = list(range(0, DS_array.shape[0], step_size))
+    steps_y_horiz = list(range(half_step, DS_array.shape[1], step_size))
 
     for i in steps_x_horiz:
         for j in steps_y_horiz:
@@ -236,8 +236,8 @@ def square_step_original(DS_array, step_size, roughness):
 
     half_step = step_size / 2
 
-    steps_x = range(0, DS_array.shape[0], half_step)
-    steps_y = range(0, DS_array.shape[0], half_step)
+    steps_x = list(range(0, DS_array.shape[0], half_step))
+    steps_y = list(range(0, DS_array.shape[0], half_step))
 
     for i in steps_x:
         for j in steps_y:

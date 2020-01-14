@@ -12,7 +12,7 @@ def runpextant(filename, pointJSON=None):
         point = json.loads(pointJSON)
         #lat, lon = waypoints.to(LAT_LONG)
         waypoints = GeoPolygon(LAT_LONG, point['latitude'], point['longitude'])
-        print waypoints.to(LAT_LONG)
+        print(waypoints.to(LAT_LONG))
     aps =[]
     for waypoint in waypoints:
         aps.append(ActivityPoint(waypoint, 0))
@@ -42,13 +42,13 @@ if __name__ == '__main__':
     print('got waypoint request')
     waypoints = runpextant('waypoints/HI_15Nov16_MD9_A.json')
 
-    print waypoints
+    print(waypoints)
     waypointsdict = {
         'latitude': list(waypoints[0]),
         'longitude' : list(waypoints[1])}
 
-    print waypointsdict
+    print(waypointsdict)
     waypointsstr = json.dumps(waypointsdict)
     with open('generated_paths/HI_15Nov16_MD9_A.json', 'w') as outfile:
         json.dump(waypointsdict, outfile)
-    print waypointsstr
+    print(waypointsstr)

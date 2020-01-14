@@ -52,8 +52,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'SEXTANT'
-copyright = u'2016, Johannes Norheim'
+project = 'SEXTANT'
+copyright = '2016, Johannes Norheim'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -205,8 +205,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-  ('index', 'SEXTANT.tex', u'SEXTANT Documentation',
-   u'Kevin Lu', 'manual'),
+  ('index', 'SEXTANT.tex', 'SEXTANT Documentation',
+   'Kevin Lu', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -235,8 +235,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'sextant', u'SEXTANT Documentation',
-     [u'Kevin Lu'], 1)
+    ('index', 'sextant', 'SEXTANT Documentation',
+     ['Kevin Lu'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -249,8 +249,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'SEXTANT', u'SEXTANT Documentation',
-   u'Kevin Lu', 'SEXTANT', 'One line description of project.',
+  ('index', 'SEXTANT', 'SEXTANT Documentation',
+   'Kevin Lu', 'SEXTANT', 'One line description of project.',
    'Miscellaneous'),
 ]
 

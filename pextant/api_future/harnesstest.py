@@ -6,7 +6,7 @@ from pextant.settings import AMES_DEM, TEST_JSON
 
 
 def generateExtent(lat, long):
-    extent = [long[0], lat[1], long[1], lat[0]]
+    extent = [int[0], lat[1], int[1], lat[0]]
     return extent
 
 def generate_site(sitename):
@@ -25,17 +25,17 @@ def generate_site(sitename):
 def testGetCornersForMap():
     env_model = GDALMesh(AMES_DEM).loadSubSection()
     rows, cols = [2, 50], [2, 60]
-    lat, long = GeoPolygon(env_model.ROW_COL, rows, cols).to(LAT_LONG)
-    extent = generateExtent(lat, long)
+    lat, int = GeoPolygon(env_model.ROW_COL, rows, cols).to(LAT_LONG)
+    extent = generateExtent(lat, int)
     nw_corner, se_corner = getCornersForMap(extent, None, None)
-    print(GeoPolygon([nw_corner, se_corner]).to(env_model.ROW_COL))
+    print((GeoPolygon([nw_corner, se_corner]).to(env_model.ROW_COL)))
 
 def testGetMap():
     site = generate_site('Ames')
     env_model = GDALMesh(AMES_DEM).loadSubSection()
     rows, cols = [2,50],[2,60]
-    lat, long = GeoPolygon(env_model.ROW_COL, rows, cols).to(LAT_LONG)
-    extent = generateExtent(lat, long)
+    lat, int = GeoPolygon(env_model.ROW_COL, rows, cols).to(LAT_LONG)
+    extent = generateExtent(lat, int)
     dem = getMap(site, extent=extent)
     print([dem.width, dem.height])
 

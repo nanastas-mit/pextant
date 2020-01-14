@@ -33,9 +33,16 @@ class GDALDataset(Dataset):
             buf_y = int(y_size * self.resolution / desired_res)
         else:
             desired_res = self.resolution
+            buf_x = int(x_size)
+            buf_y = int(y_size)
 
         band = self.raster.GetRasterBand(1)
-        map_array = band.ReadAsArray(x_offset, y_offset, x_size, y_size, buf_x, buf_y).astype(np.float)
+
+        # float casting occurs here due to an exception that is hit in gdal_array.BandRasterIONumPy if the 3rd (and 4-6)
+        #   argument is not a 'double'. In addition, explicit passing of non-None buf_x, buf_y occurs since otherwise another
+        #   exception, this one from numpy.empty (1st argument must be int or int tuple)
+        map_array = band.ReadAsArray(float(x_offset), float(y_offset), float(x_size), float(y_size), buf_x, buf_y).astype(np.float)
+
         self.map_array = map_array
         dataset_clean = ma.masked_array(map_array, np.isnan(map_array)).filled(-99999)
         dataset_clean = NpDataset(ma.masked_array(dataset_clean, dataset_clean < -2e3), desired_res)
@@ -271,11 +278,11 @@ def load_legacy(filename):
 
     with m.open() as f:
         while r:
-            c.next()
+            next(c)
             r = re.search("([^\d\W]+)\s+(-*\d+\.*\d*)", f.readline())
             if r:
                 d[r.groups()[0]] = num(r.groups()[1])
-    l = c.next() - 1
+    l = next(c) - 1
     data = np.loadtxt(str(m.resolve()), skiprows=l)
     dataset = NpDataset(data, resolution=d["cellsize"])
     if "UTMzone" in d:
@@ -295,5 +302,5 @@ if __name__ == '__main__':
         n1 = ames_em._getNeighbours(position).mesh_coordinates
         n2 = (position + kernel[s[position[0], position[1]]]).transpose()
         if not np.array_equal(n1, n2):
-            print 'Houston we have a problem'
-    print "Houston we don't have a problem'"
+            print('Houston we have a problem')
+    print("Houston we don't have a problem'")

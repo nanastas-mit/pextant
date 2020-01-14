@@ -7,4 +7,4 @@ em = tm.loadSubSection()
 testpoint = GeoPoint(em.ROW_COL, 20, 30)
 
 faceidx = em.convert_coordinates(testpoint)
-print em._getNeighbours(faceidx)
+print(em._getNeighbours(faceidx))

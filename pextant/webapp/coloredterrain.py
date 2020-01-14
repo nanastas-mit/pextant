@@ -1,10 +1,10 @@
 import docker
-from generate_colormap import colormap
+from .generate_colormap import colormap
 import shutil
 
 def generateRelief(dataset, file_path, N=100):
-    file_dir = 'C:\Users\johan\Dropbox (MIT)\BASALT\pextant\pextant\maps\\'
-    output_dir = 'C:\Users\johan\Desktop\webapp\public\CustomMaps\\'
+    file_dir = 'C:\\Users\johan\Dropbox (MIT)\BASALT\pextant\pextant\maps\\'
+    output_dir = 'C:\\Users\johan\Desktop\webapp\public\CustomMaps\\'
 
     regex_result = re.search('.+\/((\w+)\.tif)', file_path)
     file_name = regex_result.group(2)

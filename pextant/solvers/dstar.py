@@ -121,7 +121,7 @@ def _fieldDStarComputeCost(self, node, neighbor_a, neighbor_b, optimize_on, node
 
 def _fieldDStarGetKey(self, nodeDict, coordinates, start_node, optimize_on):
     # if never visited before, add it to nodeDict
-    if coordinates not in nodeDict.keys():
+    if coordinates not in list(nodeDict.keys()):
         nodeDict[coordinates] = FieldDStarNode(coordinates, float('inf'), float('inf'))
 
     node = nodeDict[coordinates]
@@ -135,7 +135,7 @@ def _fieldDStarUpdateState(self, nodeDict, openInputs, startNode, coordinates, e
     # print "State being updated: ", coordinates
 
     # If node was never previously visited, cost = infinity, mark it as visited
-    if coordinates not in nodeDict.keys():
+    if coordinates not in list(nodeDict.keys()):
         nodeDict[coordinates] = FieldDStarNode(coordinates, float('inf'), float('inf'))
         node = nodeDict[coordinates]
         logger.info('Added coordinate ', coordinates, ' to the nodeDict')
@@ -149,9 +149,9 @@ def _fieldDStarUpdateState(self, nodeDict, openInputs, startNode, coordinates, e
         for pair in self._fieldDStarGetConsecutiveNeighbors(coordinates):
             neighbor_a, neighbor_b = pair
 
-            if neighbor_a not in nodeDict.keys():
+            if neighbor_a not in list(nodeDict.keys()):
                 nodeDict[neighbor_a] = FieldDStarNode(neighbor_a)
-            if neighbor_b not in nodeDict.keys():
+            if neighbor_b not in list(nodeDict.keys()):
                 nodeDict[neighbor_b] = FieldDStarNode(neighbor_b)
 
             test_val = self._fieldDStarComputeCost(node, nodeDict[neighbor_a], nodeDict[neighbor_b], optimize_on)[1]
@@ -237,7 +237,7 @@ def _fieldDStarExtractPath(self, nodeDict, startCoordinates, endCoordinates, opt
 
     # node will always refer to the current point in the path
     while coordinates != endCoordinates:
-        print path
+        print(path)
         nextPoint = None
 
         if (coordinates[0] % 1 != 0) or (coordinates[1] % 1 != 0):  # interpolated point
@@ -340,7 +340,7 @@ def _fieldDStarExtractPath(self, nodeDict, startCoordinates, endCoordinates, opt
             path.append(nextPoint)
             coordinates = nextPoint
         else:
-            print "nextPoint doesn't exist!"
+            print("nextPoint doesn't exist!")
             break
 
     return path
@@ -362,7 +362,7 @@ def fieldDStarSearch(self, startCoords, endCoords, optimize_on, numTestPoints=11
     self._fieldDStarComputeShortestPath(nodeDict, startCoords, endCoords, open_coords, optimize_vector)
 
     for key in nodeDict:
-        print '{', key[0], ',', key[1], ',', nodeDict[key].cost, '},'
+        print('{', key[0], ',', key[1], ',', nodeDict[key].cost, '},')
 
     path = self._fieldDStarExtractPath(nodeDict, startCoords, endCoords, optimize_vector, numTestPoints)
     # return self._toJSON(path, optimize_vector, [ActivityPoint(startCoords), ActivityPoint(endCoords)])
@@ -400,7 +400,7 @@ def fieldDStarCompletePath(self, optimize_on, waypoints, returnType="JSON", file
         return data
     elif returnType == "csv":
         sequence = self._toCSV(finalPath, optimize_on, waypoints)
-        print sequence
+        print(sequence)
         if fileName:
             with open(fileName, 'wb') as csvfile:
                 writer = csv.writer(csvfile)

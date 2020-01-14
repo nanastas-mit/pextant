@@ -1,6 +1,7 @@
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from pextant.EnvironmentalModel import load_legacy
+from pextant.EnvironmentalModel import GDALMesh
 from pextant.explorers import Astronaut
 from pextant.lib.geoshapely import GeoPoint, GeoPolygon
 from pextant.solvers.astarMesh import astarSolver
@@ -8,7 +9,10 @@ from pextant.viz.utils import hillshade
 import time
 import os
 
-print("__name__ = {0}, __file__ = {1}, dirname = {2}".format(__name__, __file__, os.path.dirname(__file__)))
+print(("__name__ = {0}, __file__ = {1}, dirname = {2}".format(__name__, __file__, os.path.dirname(__file__))))
+
+ames_gridmesh = GDALMesh('Ames.tif')
+ames_model = ames_gridmesh.loadSubSection()
 
 apollo14_grid_mesh = load_legacy("Apollo14.txt")
 apollo14_model = apollo14_grid_mesh.loadSubSection(maxSlope=10, cached=True)

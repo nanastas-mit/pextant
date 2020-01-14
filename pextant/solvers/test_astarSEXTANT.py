@@ -1,4 +1,4 @@
-from astarMesh import ExplorerCost
+from .astarMesh import ExplorerCost
 from pextant.EnvironmentalModel import GDALMesh
 from pextant.mesh.triangularmesh import TriPolyMesh
 from pextant.explorers import Astronaut

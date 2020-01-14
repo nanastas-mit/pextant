@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
-from explorers import Astronaut
+from .explorers import Astronaut
 
 class TestEnergyCostFunctions(unittest.TestCase):
     def _generate_slopes(self):

@@ -69,8 +69,8 @@ class Pathfinder:
 
 if __name__ == '__main__':
     from pextant.analysis.loadWaypoints import loadPoints
-    from explorers import Astronaut
-    from EnvironmentalModel import GDALMesh
+    from .explorers import Astronaut
+    from .EnvironmentalModel import GDALMesh
 
     hi_low = GDALMesh('maps/HI_lowqual_DEM.tif')
     waypoints = loadPoints('waypoints/HI_13Nov16_MD7_A.json')
@@ -78,4 +78,4 @@ if __name__ == '__main__':
     astronaut = Astronaut(80)
     pathfinder = Pathfinder(astronaut, env_model)
     out = pathfinder.aStarCompletePath('Energy', waypoints)
-    print out
+    print(out)

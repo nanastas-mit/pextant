@@ -252,7 +252,7 @@ class GeoPolygon(GeoObject, LineString):
             x, y = args
             geo_type = firstarg
         GeoObject.__init__(self, geo_type, x, y)
-        xytuple = map(tuple, np.array([self.easting, self.northing]).transpose())
+        xytuple = list(map(tuple, np.array([self.easting, self.northing]).transpose()))
         # print xytuple
         LineString.__init__(self, xytuple)
 

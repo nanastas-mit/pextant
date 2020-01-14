@@ -16,8 +16,8 @@ def runpextant(socketlink=None):
     start_node = MeshSearchElement(env_model.getMeshElement(waypoints[0]))
     end_node = MeshSearchElement(env_model.getMeshElement(waypoints[1]))
     out = aStarSearch(start_node, end_node, cost_function)
-    print 'done running pextant'
-    print out[1]
+    print('done running pextant')
+    print(out[1])
     return out[0]
 
 if __name__ == '__main__':

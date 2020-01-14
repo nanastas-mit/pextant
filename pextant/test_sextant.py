@@ -18,7 +18,7 @@ send_json1 = {
 
 r1 = requests.post(config + '/setwaypoints',
                    data = json.dumps(send_json1), verify=False, timeout=5)
-print(r1.json())
+print((r1.json()))
 send_json2 = {
         'return':'segmented'
 }

@@ -124,7 +124,7 @@ def callPextant(request, plan, optimize=None, maxSlope=15, extent=None):
         if 'NaN' not in result and 'Infinity' not in result:
             plan.jsonPlan.sequence = json.loads(result)
             plan.save()
-    except Exception, e:
+    except Exception as e:
         traceback.print_exc()
         raise e
         pass

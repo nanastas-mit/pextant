@@ -1,4 +1,4 @@
-from flask_settings import GEOTIFF_FULL_PATH
+from .flask_settings import GEOTIFF_FULL_PATH
 import sys
 import traceback
 sys.path.append('../')
@@ -23,9 +23,9 @@ def crossdomain(origin=None, methods=None, headers=None,
                 automatic_options=True):
     if methods is not None:
         methods = ', '.join(sorted(x.upper() for x in methods))
-    if headers is not None and not isinstance(headers, basestring):
+    if headers is not None and not isinstance(headers, str):
         headers = ', '.join(x.upper() for x in headers)
-    if not isinstance(origin, basestring):
+    if not isinstance(origin, str):
         origin = ', '.join(origin)
     if isinstance(max_age, timedelta):
         max_age = max_age.total_seconds()
@@ -60,7 +60,7 @@ def crossdomain(origin=None, methods=None, headers=None,
     return decorator
 
 def main(argv):
-    print 'STARTING SEXTANT'
+    print('STARTING SEXTANT')
     geotiff_full_path = ""
     try:
         geotiff_full_path = argv[0]
@@ -71,7 +71,7 @@ def main(argv):
     if not geotiff_full_path or geotiff_full_path == 'sextant:app':
         geotiff_full_path = GEOTIFF_FULL_PATH
 
-    print geotiff_full_path
+    print(geotiff_full_path)
     
     gdal_mesh = GDALMesh(geotiff_full_path)
     explorer = Astronaut(80)
@@ -80,7 +80,7 @@ def main(argv):
     @app.route('/test', methods=['GET', 'POST'])
     @crossdomain(origin='*')
     def test():
-        print str(request)
+        print(str(request))
         return json.dumps({'test':'test'})
         
     @app.route('/setwaypoints', methods=['GET', 'POST'])
@@ -93,14 +93,14 @@ def main(argv):
             
             xp_json = request_data['xp_json']
             json_loader = JSONloader(xp_json['sequence'])
-            print 'loaded xp json'
+            print('loaded xp json')
             waypoints = json_loader.get_waypoints()
-            print 'gdal mesh is  built from %s' % str(geotiff_full_path)
+            print('gdal mesh is  built from %s' % str(geotiff_full_path))
             environmental_model = gdal_mesh.loadSubSection(waypoints.geoEnvelope(), cached=True)
             solver = astarSolver(environmental_model, explorer, optimize_on='Energy')
             print('loaded fine')
             return json.dumps({'loaded': True})
-        except Exception, e:
+        except Exception as e:
             traceback.print_exc()
             response = {'error': str(e),
                         'status_code': 400}
@@ -110,14 +110,14 @@ def main(argv):
     @crossdomain(origin='*')
     def solve():
         global solver, waypoints, environmental_model
-        print 'in solve'
+        print('in solve')
         request_data = request.get_json(force=True)
         return_type = request_data['return']
         if 'xp_json' in request_data:
             xp_json = request_data['xp_json']
             json_loader = JSONloader(xp_json['sequence'])
             waypoints = json_loader.get_waypoints()
-        print(waypoints.to(LAT_LONG))
+        print((waypoints.to(LAT_LONG)))
         environmental_model = gdal_mesh.loadSubSection(waypoints.geoEnvelope(), cached=True)
         solver = astarSolver(environmental_model, explorer, optimize_on='Energy')
         search_results, rawpoints, _ = solver.solvemultipoint(waypoints)
@@ -143,7 +143,7 @@ def main(argv):
         data_np = np.array(data['waypoints']).transpose()
         #json_waypoints = JSONloader(xpjson)
         waypoints = GeoPolygon(LAT_LONG, *data_np)
-        print waypoints.to(LAT_LONG)
+        print(waypoints.to(LAT_LONG))
 
         environmental_model = gdal_mesh.loadSubSection(waypoints.geoEnvelope(), cached=True)
         explorer = Astronaut(80)

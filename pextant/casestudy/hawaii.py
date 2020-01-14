@@ -26,4 +26,4 @@ for waypoint in waypoints.to(LAT_LONG).transpose():
     aps.append(ActivityPoint(GeoPoint(LAT_LONG,lat,lon), 0))
 
 out = P.aStarCompletePath([0,0,1], aps, 'JSON')
-print out
+print(out)

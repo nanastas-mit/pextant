@@ -1,4 +1,4 @@
-from geoshapely import *
+from .geoshapely import *
 import json
 import pandas as pd
 pd.options.display.max_rows = 5
@@ -17,20 +17,20 @@ latlongFull = pd.DataFrame(w)
 latlongInter = latlongFull['coordinates'].values.tolist()
 waypointslatlong = pd.DataFrame(latlongInter, columns=['longitude','latitude'])
 
-print waypointslatlong['latitude'].values, waypointslatlong['longitude'].values
+print(waypointslatlong['latitude'].values, waypointslatlong['longitude'].values)
 waypoints = GeoPolygon(latlong, waypointslatlong['latitude'].values, waypointslatlong['longitude'].values)
 from EnvironmentalModel import *
 info = loadElevationsLite("maps/hwmidres.tif")
 nw_corner = GeoPoint(UTM(info["zone"]), info["nw_easting"], info["nw_northing"])
-print nw_corner
+print(nw_corner)
 XY = Cartesian(nw_corner, info["resolution"])
 se_corner = GeoPoint(XY, info["width"], info["height"])
-print se_corner
+print(se_corner)
 corners = LineString([(p.x, p.y) for p in [nw_corner, se_corner]])
 
 bounds = corners.envelope
-print bounds
+print(bounds)
 zoomarea = waypoints.envelope
-print zoomarea
+print(zoomarea)
 intersection = bounds.intersection(zoomarea)
-print intersection
+print(intersection)

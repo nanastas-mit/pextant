@@ -4,5 +4,5 @@ import gdist
 
 ames = trimesh.load('../notebooks/Ames_inverted.ply')
 
-print ames.faces
+print(ames.faces)
 

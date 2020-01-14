@@ -124,7 +124,7 @@ class TriMeshModel(EnvironmentalModel):
         #potential_neighbours = reduce(np.union1d, map(self.neighbours.get, self.faces[faceidx]))
         #potential_neighbours = np.setdiff1d(potential_neighbours, np.array(faceidx))
         potential_neighbours = self.cached_neighbours[faceidx]
-        passable_neighbours = np.array(filter(self._isPassable, potential_neighbours))
+        passable_neighbours = np.array(list(filter(self._isPassable, potential_neighbours)))
         triangles = self.dataset.mesh.triangles_center[passable_neighbours]
         # TODO: need to make this a function:
         xycoords = triangles[:,:2].transpose()*self.resolution

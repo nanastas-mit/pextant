@@ -5,7 +5,7 @@ Aim is to create a webpage that is constantly updated with random numbers from a
 """
 
 # Start with a basic flask app webpage.
-from flask.ext.socketio import SocketIO, emit
+from flask_socketio import SocketIO
 from flask import Flask, render_template, url_for, copy_current_request_context
 from random import random
 from time import sleep
@@ -36,10 +36,10 @@ class RandomThread(Thread):
         Ideally to be run in a separate thread?
         """
         #infinite loop of magical random numbers
-        print "Making random numbers"
+        print("Making random numbers")
         while not thread_stop_event.isSet():
             number = round(random()*10, 3)
-            print number
+            print(number)
             socketio.emit('message', number)
             sleep(self.delay)
 
@@ -54,8 +54,8 @@ def test_connect():
     print('Client connected')
 
     #Start the random number generator thread only if the thread has not been started before.
-    if not thread.isAlive():
-        print "Starting Thread"
+    if not thread.is_alive():
+        print("Starting Thread")
         thread = RandomThread()
         thread.start()
 

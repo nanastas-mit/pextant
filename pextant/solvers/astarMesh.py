@@ -1,7 +1,7 @@
 import numpy as np
 import networkx as nx
-from SEXTANTsolver import sextantSearch, SEXTANTSolver, sextantSearchList
-from astar import aStarSearchNode, aStarNodeCollection, aStarCostFunction, aStarSearch
+from .SEXTANTsolver import sextantSearch, SEXTANTSolver, sextantSearchList
+from .astar import aStarSearchNode, aStarNodeCollection, aStarCostFunction, aStarSearch
 from pextant.EnvironmentalModel import EnvironmentalModel, GridMeshModel
 from pextant.lib.geoshapely import GeoPoint, GeoPolygon, LONG_LAT
 from pextant.solvers.nxastar import GG, astar_path
@@ -37,7 +37,7 @@ class MeshSearchCollection(aStarNodeCollection):
 
     def __getitem__(self, index):
         mesh_search_element = MeshSearchElement(self.collection.__getitem__(index), self.parent)
-        mesh_search_element.derived = dict(zip(['pathlength','time','energy'],self.derived[:,index]))
+        mesh_search_element.derived = dict(list(zip(['pathlength','time','energy'],self.derived[:,index])))
         return mesh_search_element
 
 class ExplorerCost(aStarCostFunction):
@@ -189,7 +189,7 @@ class ExplorerCost(aStarCostFunction):
         costs = np.dot(optimize_vector.transpose(), optimize_weights)
         tonodes.derived = optimize_vector
 
-        return zip(tonodes, to_cllt.get_states(), costs)
+        return list(zip(tonodes, to_cllt.get_states(), costs))
 
     def getCostToNeighbours(self, from_node):
         row, col = from_node.state
@@ -296,7 +296,7 @@ class astarSolver(SEXTANTSolver):
 def generateGraph(em, weightfx):
     t1 = time()
     G = nx.DiGraph()
-    rows, cols = range(em.y_size), range(em.x_size)
+    rows, cols = list(range(em.y_size)), list(range(em.x_size))
     G.add_nodes_from((i, j) for i in rows for j in cols)
     for i in rows:
         dt = time() - t1
@@ -308,7 +308,7 @@ def generateGraph(em, weightfx):
             n = np.array((i,j))+em.searchKernel.getKernel()[em.cached_neighbours[i,j]]
             G.add_weighted_edges_from(((i,j), tuple(k), weightfx((i,j),tuple(k))) for k in n)
     t2 = time()
-    print(t2-t1)
+    print((t2-t1))
     return G
 
 if __name__ == '__main__':

@@ -79,17 +79,17 @@ class GPSRecorderThread(StoppableThread):
         return '../../data/gps/hawaii17/gps_' + extraname + '_' + self.save_name_baseline + '.json'
 
     def correctForOffset(self, lat, long):
-        easting, northing = GeoPoint(LAT_LONG, lat, long).to(UTM(5))
-        print self.gpsoffset["easting"]
-        print self.gpsoffset['northing']
+        easting, northing = GeoPoint(LAT_LONG, lat, int).to(UTM(5))
+        print(self.gpsoffset["easting"])
+        print(self.gpsoffset['northing'])
         trueasting = easting - self.gpsoffset["easting"]
         truenorthing = northing - self.gpsoffset['northing']
         return GeoPoint(UTM(5), trueasting, truenorthing).to(LAT_LONG)
 
     def newGPSPoint(self, lat, lon, alt):
-        print lat, lon
+        print(lat, lon)
         raw_point_json = self.recordAndSaveGPSPoint(lat, lon, alt, 'raw')
-        print(lat, lon, alt)
+        print((lat, lon, alt))
         #correctedPointLat, correctedPointLong = self.correctForOffset(lat, lon)
         #self.getMesh(correctedPointLat, correctedPointLong)
         #corrected_point_json = self.recordAndSaveGPSPoint(correctedPointLat, correctedPointLong, 0, 'corrected')
@@ -127,8 +127,8 @@ class GPSRecorderThread(StoppableThread):
             }
         }
         json_local_elevations = json.dumps(message)
-        print json_local_elevations
-        print self.socket_channel2.channelname
+        print(json_local_elevations)
+        print(self.socket_channel2.channelname)
         self.socket_channel2.emit(message)
 
     def recordAndSaveGPSPoint(self, lat, lon, alt, extraname=''):
@@ -152,7 +152,7 @@ class GPSRecorderThread(StoppableThread):
         return latlon_point_json
 
     def emit(self, latlon_point_json):
-        print str(time())
+        print(str(time()))
         if self.do_emit:
             self.socket_channel.emit(latlon_point_json)
 
@@ -211,7 +211,7 @@ class RandomThread(StoppableThread):
 
     def randomNumberGenerator(self):
         while not self.stopped():
-            print 'emitting'
+            print('emitting')
             self.socket_ref.emit('event', str(time()))
             eventlet.sleep()
 
@@ -248,11 +248,11 @@ class FakeEmitter(object):
         pass
 
     def emit(self, message):
-        print 'emitting'
-        print message
+        print('emitting')
+        print(message)
 
 if __name__ == '__main__':
-    print(json.dumps(serial_ports()))
+    print((json.dumps(serial_ports())))
     gps = GPSSerialEmulator(FakeEmitter(), FakeEmitter(),'COM10')
     gps.record = False
     gps.start()

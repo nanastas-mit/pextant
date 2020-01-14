@@ -11,4 +11,4 @@ if __name__ == '__main__':
     p = Pool(4)
     t = Test(5)
     out = p.map(t.plus, x, y)
-    print out
+    print(out)

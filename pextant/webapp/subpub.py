@@ -1,12 +1,12 @@
 from flask import Flask, render_template
-from flask.ext.socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
 socketio = SocketIO(app)
 
 @socketio.on('message')
 def test_message(message):
-    print 'got message'
+    print('got message')
     socketio.emit('message', 'hello')
 
 @socketio.on('my broadcast event', namespace='/test')

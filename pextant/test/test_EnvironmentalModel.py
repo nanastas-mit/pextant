@@ -7,7 +7,11 @@ inferno_map_address = 'datasets\INFERNO-DEM.tif'
 
 ds = gdal.Open(inferno_map_address)
 band = ds.GetRasterBand(1)
-map = band.ReadAsArray(1000, 1000, 20, 10).astype(numpy.float)
+
+# float casting occurs here due to an exception that is hit in gdal_array.BandRasterIONumPy if the 3rd (and 4-6)
+#   argument is not a 'double'. In addition, explicit passing of non-None buf_x, buf_y occurs since otherwise another
+#   exception, this one from numpy.empty (1st argument must be int or int tuple)
+map = band.ReadAsArray(1000., 1000., 20., 10., 20, 10).astype(numpy.float)
 
 GeoInfo = ds.GetGeoTransform()
 

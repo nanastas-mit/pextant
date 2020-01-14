@@ -83,7 +83,7 @@ class MeshCollection(object):
         if self.mesh_coordinates.ndim == 1:
             return self.mesh_coordinates
         else:
-            return map(tuple, self.mesh_coordinates.transpose())
+            return list(map(tuple, self.mesh_coordinates.transpose()))
 
     def raw(self):
         return np.array(self.coordinates)
@@ -106,6 +106,6 @@ if __name__ == '__main__':
     out = ames_em._getNeighbours(2625)
     otherelt = ames_em._getMeshElement(10)
     #print(out.__getitem__(2).distanceToElt(ames_em._getMeshElement(10)))
-    print out
-    print(out.mesh_coordinates)
+    print(out)
+    print((out.mesh_coordinates))
 

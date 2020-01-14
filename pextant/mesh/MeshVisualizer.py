@@ -28,7 +28,7 @@ class TriExpandViz(object):
         self.counter += 1
 
         if self.counter % self.counter_interval == 0:
-            print self.counter
+            print(self.counter)
 
         if self.counter % self.counter_interval == 0:
             self.draw()
@@ -52,7 +52,7 @@ class ExpandViz(object):
         upper_row, left_col = upper_left.to(self.env_model.ROW_COL)
         lower_row, right_col = lower_right.to(self.env_model.ROW_COL)
         plt.matshow(self.expandedgrid[upper_row:lower_row+1,left_col:right_col+1])
-        print((upper_row, lower_row), (left_col,right_col))
+        print(((upper_row, lower_row), (left_col,right_col)))
         #print(waypoints.to(env_model.COL_ROW))
         #plt.scatter(*waypoints.to(env_model.COL_ROW), c='r')
         plt.show()
@@ -68,7 +68,7 @@ class ExpandViz(object):
         self.counter += 1
 
         if self.counter % 1000 == 0:
-            print self.counter
+            print(self.counter)
 
         if self.counter % self.counter_interval == 0:
             self.draw()

@@ -2,7 +2,7 @@ from flask import Flask, session
 from flask_socketio import SocketIO
 import sys
 sys.path.append('../../')
-from serialgps import GPSSerialThread, serial_ports, GPSSerialEmulator, RandomThread, FakeEmitter
+from .serialgps import GPSSerialThread, serial_ports, GPSSerialEmulator, RandomThread, FakeEmitter
 from pextant.lib.geoshapely import LAT_LONG, GeoPoint, Cartesian, UTM
 from pextant.analysis.loadWaypoints import JSONloader
 from pathlib2 import Path
@@ -26,7 +26,7 @@ class SocketChannel:
         self.onrecieve = self.socket.on(channelname)(lambda data: onrecieve(json.loads(data)))
 
     def emit(self, message):
-        print self.channelname + ' emitting: ' + str(message)
+        print(self.channelname + ' emitting: ' + str(message))
         self.socket.emit(self.channelname, message)
 
 thread = Thread()
@@ -94,15 +94,15 @@ def getcalibration(data):
     global thread
     global GPS_OFFSET
     mappoint = json.loads(data)
-    print data
+    print(data)
     gpspoint = json.loads(thread.most_recent_gps_point_raw)
-    print gpspoint
+    print(gpspoint)
     geomappoint = GeoPoint(LAT_LONG, mappoint["latitude"], mappoint["longitude"])
     geogpspoint = GeoPoint(LAT_LONG, gpspoint["latitude"], gpspoint["longitude"])
-    print geogpspoint
-    print geomappoint
+    print(geogpspoint)
+    print(geomappoint)
     offset = geogpspoint.to(UTM(5)) - geomappoint.to(UTM(5))
-    print offset
+    print(offset)
     GPS_OFFSET = {
         'easting': offset[0],
         'northing': offset[1]

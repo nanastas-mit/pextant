@@ -95,13 +95,13 @@ class sextantSearch(object):
             'coordinates': coordinates
         }
         results = {}
-        for k, v in self.namemap.items():
+        for k, v in list(self.namemap.items()):
             results.update({v[0]:[],v[1]:0})
         for i, mesh_srch_elt in enumerate(self.nodes):
             derived = mesh_srch_elt.derived
-            for k, v in derived.items():
+            for k, v in list(derived.items()):
                 results[self.namemap[k][0]].append(v)
-        for k, v in self.namemap.items():
+        for k, v in list(self.namemap.items()):
             results[v[1]] = sum(results[v[0]])
         out["derivedInfo"] = results
         return out

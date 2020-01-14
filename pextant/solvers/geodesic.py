@@ -58,7 +58,7 @@ class gdistSolver(SEXTANTSolver):
     def solve_vertex(self):
         energy_cost = self.energy_cost
         neighbouring_faces = self.calculate_neighbouring_faces()
-        z_cost = [np.mean(energy_cost[neighbouring_face]) for neighbouring_face in neighbouring_faces.itervalues()]
+        z_cost = [np.mean(energy_cost[neighbouring_face]) for neighbouring_face in neighbouring_faces.values()]
         return np.array(z_cost)
 
     def calculate_neighbouring_faces(self):

@@ -118,15 +118,15 @@ if __name__ == '__main__':
     from pextant.settings import *
     md = JSONloader.from_file(MD_HI[6])
     sextantsol = md.get_segments()
-    test =json.dumps([{u'commands': [], u'uuid': u'ccf34b91-86f4-47ee-b03d-3dbbba6ba167',
-      u'geometry': {u'type': u'Point', u'coordinates': [-155.20191861222781, 19.366498026755977]}, u'tolerance': 0.6,
-      u'userDuration': 0, u'boundary': 0.6, u'type': u'Station', u'id': u'HIL11_A_WAY0'}, {
-         u'derivedInfo': {u'durationSeconds': 28, u'straightLineDurationSeconds': 28,
-                          u'distanceMeters': 25.15366493675656}, u'commands': [], u'type': u'Segment',
-         u'id': u'HIL11_A_SEG1', u'uuid': u'69aa6e5f-6a10-4568-bfea-5bfbc8417ba7'},
-     {u'commands': [], u'uuid': u'1a159ed9-77ee-4f79-9163-e3685a01a00c',
-      u'geometry': {u'type': u'Point', u'coordinates': [-155.2016858384008, 19.36644374514718]}, u'tolerance': 0.6,
-      u'userDuration': 0, u'boundary': 0.6, u'type': u'Station', u'id': u'HIL11_A_WAY1'}])
+    test =json.dumps([{'commands': [], 'uuid': 'ccf34b91-86f4-47ee-b03d-3dbbba6ba167',
+      'geometry': {'type': 'Point', 'coordinates': [-155.20191861222781, 19.366498026755977]}, 'tolerance': 0.6,
+      'userDuration': 0, 'boundary': 0.6, 'type': 'Station', 'id': 'HIL11_A_WAY0'}, {
+         'derivedInfo': {'durationSeconds': 28, 'straightLineDurationSeconds': 28,
+                          'distanceMeters': 25.15366493675656}, 'commands': [], 'type': 'Segment',
+         'id': 'HIL11_A_SEG1', 'uuid': '69aa6e5f-6a10-4568-bfea-5bfbc8417ba7'},
+     {'commands': [], 'uuid': '1a159ed9-77ee-4f79-9163-e3685a01a00c',
+      'geometry': {'type': 'Point', 'coordinates': [-155.2016858384008, 19.36644374514718]}, 'tolerance': 0.6,
+      'userDuration': 0, 'boundary': 0.6, 'type': 'Station', 'id': 'HIL11_A_WAY1'}])
 
     jloader = JSONloader(test)
     jloader.get_waypoints()
