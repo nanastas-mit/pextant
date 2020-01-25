@@ -3,15 +3,19 @@ from heapq import heappop, heappush
 from itertools import count
 import numpy as np
 
+
 class GG:
     def __init__(self, solver):
         self.em = solver.env_model
         self.costfx = solver.cost_function.cached["costs"]["energy"]
+        self.nick = 4
 
     def n(self, node):
-        n = np.array((node)) + self.em.searchKernel.getKernel()[self.em.cached_neighbours[node]]
+        traversable_neighbors = self.em.cached_neighbours[node]
+        search_kernal = self.em.searchKernel.getKernel()[traversable_neighbors]
+        neighbors = np.array(node) + search_kernal
         w = self.costfx[node[0], node[1], self.em.cached_neighbours[node]]
-        return list(zip(list(map(tuple, n)), w.tolist()))
+        return list(zip(list(map(tuple, neighbors)), w.tolist()))
 
 # Based on networkx's implementation, which cant be used out of
 # the box due to networkx's underlying Graph structure.

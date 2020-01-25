@@ -1,5 +1,6 @@
 import numpy as np
 import networkx as nx
+import pextant_cpp
 from .SEXTANTsolver import sextantSearch, SEXTANTSolver, sextantSearchList
 from .astar import aStarSearchNode, aStarNodeCollection, aStarCostFunction, aStarSearch
 from pextant.EnvironmentalModel import EnvironmentalModel, GridMeshModel
@@ -221,16 +222,26 @@ class ExplorerCost(aStarCostFunction):
 
 
 class astarSolver(SEXTANTSolver):
-    def __init__(self, env_model, explorer_model, viz=None, optimize_on='Energy', cached=False, inhouse=True,
-                 heuristic_accelerate=1):
+
+    # algorithm type 'enum' rather than bool (previously: inhouse=true/false)
+    class AlgorithmType:
+        PY_INHOUSE = 1
+        PY_NETWORKX = 2
+        CPP_NETWORKX = 3
+
+    def __init__(self, env_model, explorer_model, viz=None, optimize_on='Energy',
+                 cached=False, algorithm_type=AlgorithmType.PY_INHOUSE, heuristic_accelerate=1):
         self.explorer_model = explorer_model
         self.optimize_on = optimize_on
         self.cache = env_model.cached
-        self.inhouse = inhouse
+        self.algorithm_type = algorithm_type
         self.G = None
         cost_function = ExplorerCost(explorer_model, env_model, optimize_on, env_model.cached, heuristic_accelerate)
         super(astarSolver, self).__init__(env_model, cost_function, viz)
-        if not inhouse:
+
+        # if using networkx-based implementation, set G
+        if algorithm_type == astarSolver.AlgorithmType.CPP_NETWORKX or \
+                algorithm_type == astarSolver.AlgorithmType.PY_NETWORKX:
             self.G = GG(self)
 
     def accelerate(self, weight=10):
@@ -238,10 +249,12 @@ class astarSolver(SEXTANTSolver):
                                           self.cache, heuristic_accelerate=weight)
 
     def solve(self, startpoint, endpoint):
-        if self.inhouse:
-            solver = self.solveinhouse
-        else:
+        if self.algorithm_type == astarSolver.AlgorithmType.CPP_NETWORKX:
+            solver = self.solvenx_cpp
+        elif self.algorithm_type == astarSolver.AlgorithmType.PY_NETWORKX:
             solver = self.solvenx
+        else: # self.algorithm_type == astarSolver.AlgorithmType.PY_INHOUSE
+            solver = self.solveinhouse
         return solver(startpoint, endpoint)
 
     def solveinhouse(self, startpoint, endpoint):
@@ -260,18 +273,6 @@ class astarSolver(SEXTANTSolver):
             return search
         else:
             return False
-
-    def weight(self, a, b):
-        selection = (np.array(a) + self.env_model.searchKernel.getKernel()).tolist().index(list(b))
-        costs = self.cost_function.cached["costs"]
-        optimize_weights = self.cost_function.optimize_vector
-        optimize_vector = np.array([
-            costs['path'][a][selection],
-            costs['time'][a][selection],
-            costs['energy'][a][selection]
-        ])
-        costs = np.dot(optimize_vector.transpose(), optimize_weights)
-        return costs
 
     def solvenx(self, startpoint, endpoint):
         env_model = self.env_model
@@ -292,6 +293,47 @@ class astarSolver(SEXTANTSolver):
                 return False
         else:
             return False
+
+    def solvenx_cpp(self, startpoint, endpoint):
+
+        # get source and target coordinates
+        source = self.env_model.getMeshElement(startpoint).mesh_coordinate
+        target = self.env_model.getMeshElement(endpoint).mesh_coordinate
+
+        # check that we have data at both start and end
+        if self.env_model.elt_hasdata(startpoint) and self.env_model.elt_hasdata(endpoint):
+
+            # prepare cost function
+            self.cost_function.setEndNode(MeshSearchElement(self.env_model.getMeshElement(endpoint)))
+
+            # perform search
+            raw = pextant_cpp.astar_solve(source, target,
+                                          lambda a: 0.0,  # self.cost_function._getHeuristicCost(*a),
+                                          self.G.n)
+
+            # if we have a good result
+            if len(raw) > 0:
+
+                # append result to 'searches' list and return
+                coordinates = GeoPolygon(self.env_model.COL_ROW, *np.array(raw).transpose()[::-1])
+                search = sextantSearch(raw, [], coordinates, [])
+                self.searches.append(search)
+                return search
+
+        # default to fail result
+        return False
+
+    def weight(self, a, b):
+        selection = (np.array(a) + self.env_model.searchKernel.getKernel()).tolist().index(list(b))
+        costs = self.cost_function.cached["costs"]
+        optimize_weights = self.cost_function.optimize_vector
+        optimize_vector = np.array([
+            costs['path'][a][selection],
+            costs['time'][a][selection],
+            costs['energy'][a][selection]
+        ])
+        costs = np.dot(optimize_vector.transpose(), optimize_weights)
+        return costs
 
 def generateGraph(em, weightfx):
     t1 = time()
