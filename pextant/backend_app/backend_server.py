@@ -1,0 +1,157 @@
+import pextant.backend_app.events.pextant_events as pextant_events
+import socket
+import selectors
+import traceback
+from pextant.backend_app.events.event_dispatcher import EventDispatcher
+from pextant.backend_app.client_event_handler import ClientEventHandler, SocketClosedException
+
+
+class PextantServer:
+    """A simple server used for accepting client connections and handling subsequent communication"""
+
+    '''=======================================
+    FIELDS
+    ======================================='''
+    # consts
+    CONNECTION_ACCEPT_SERVER_DATA = "SERVER_SOCKET"
+
+    # properties
+    @property
+    def is_listening(self):
+        return self.server_socket is not None
+
+    '''=======================================
+    STARTUP/SHUTDOWN
+    ======================================='''
+    def __init__(self, host_name, host_port):
+
+        # create selector
+        self.selector = selectors.DefaultSelector()
+
+        # store server information, reference to socket
+        self.server_address = (host_name, host_port)
+        self.server_socket = None
+
+        # store information about all clients that connect
+        self.connected_client_handlers = {}
+
+    def close(self):
+        self.stop_listening()
+        self.selector.close()
+
+    def start_listening(self):
+
+        # if we don't already have an active listening socket
+        if self.server_socket is None:
+
+            # create the server socket
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_socket.bind(self.server_address)
+            self.server_socket.listen()
+
+            print("listening for clients at {0}:{1}".format(self.server_address[0], self.server_address[1]))
+
+            # register with selector (read only - only job is to accept connections)
+            self.selector.register(self.server_socket, selectors.EVENT_READ, data=PextantServer.CONNECTION_ACCEPT_SERVER_DATA)
+
+    def stop_listening(self):
+
+        # close all client connections
+        self._close_all_client_sockets()
+
+        # if we have a connection accept socket
+        if self.server_socket:
+
+            # shut it down
+            self.selector.unregister(self.server_socket)
+            self.server_socket.close()
+            self.server_socket = None
+
+            print("listening socket closed")
+
+    '''=======================================
+    UPDATES
+    ======================================='''
+    def update(self):
+
+        # if we have no server socket, do nothing
+        if self.server_socket is None:
+            return
+
+        # get all events that are currently ready
+        events = self.selector.select(timeout=0)
+        for key, mask in events:
+
+            # check to see if socket is our connection server
+            if key.data == PextantServer.CONNECTION_ACCEPT_SERVER_DATA:
+
+                # all this thing does is accept connections
+                self._accept_pending_connection()
+
+            # otherwise... (one of our connected, peer-to-peer sockets)
+            else:
+
+                # have the event handler process the event
+                client_socket = key.fileobj
+                client_event_handler = self.connected_client_handlers[client_socket]
+                try:
+                    client_event_handler.process_events(mask)
+
+                # if client socket closes, just close on our end
+                except SocketClosedException as e:
+                    print("SocketClosedException:", e)
+                    self._close_client_socket(client_socket)
+
+                # some other exception - print it out
+                except Exception as e:  # RuntimeError or ValueError
+                    print(
+                        "main: error: exception for",
+                        f"{client_event_handler.address}:\n{traceback.format_exc()}",
+                    )
+                    self._close_client_socket(client_socket)
+
+    '''=======================================
+    CONNECTED CLIENTS
+    ======================================='''
+    def send_message_to_client(self, client_socket, content):
+
+        # if client is in list of connected
+        if client_socket in self.connected_client_handlers:
+
+            # get handler and send a message
+            client_event_handler = self.connected_client_handlers[client_socket]
+            client_event_handler.enqueue_message(content)
+
+    def _accept_pending_connection(self):
+
+        # accept connection
+        client_socket, address = self.server_socket.accept()
+
+        # register with our selector
+        client_event_handler = ClientEventHandler(self.selector, client_socket, address)
+        events = selectors.EVENT_READ  # | selectors.EVENT_WRITE
+        self.selector.register(client_socket, events)
+
+        # add to container of connected clients
+        self.connected_client_handlers[client_socket] = client_event_handler
+
+        # dispatch event
+        EventDispatcher.get_instance().trigger_event(pextant_events.CLIENT_CONNECTED, client_socket, address)
+
+    def _close_client_socket(self, client_socket):
+
+        # close the handler (will close socket) and remove from container
+        if client_socket in self.connected_client_handlers:
+            client_event_handler = self.connected_client_handlers[client_socket]
+            del self.connected_client_handlers[client_socket]
+            client_event_handler.close()
+
+    def _close_all_client_sockets(self):
+
+        # close all handlers
+        for client_event_handler in self.connected_client_handlers.values():
+            client_event_handler.close()
+
+        # clear the container
+        self.connected_client_handlers.clear()

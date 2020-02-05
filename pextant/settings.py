@@ -5,7 +5,7 @@ from pextant.analysis.loadWaypoints import JSONloader
 #from pextant.explorers import Astronaut
 #from pextant.mesh.MeshVisualizer import MeshVizM
 from pextant.solvers.astarMesh import astarSolver, ExplorerCost
-from pathlib2 import Path
+from pathlib import Path
 
 #explorer = Astronaut(80)
 #mv = MeshViz(True)

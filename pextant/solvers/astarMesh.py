@@ -207,7 +207,7 @@ class ExplorerCost(aStarCostFunction):
             Performance optimization: tonodes instead of tonode, potentially numpy optimized, only need to load info
             from fromnode once
         """
-        explorer  = self.explorer
+        explorer = self.explorer
         slopes, path_lengths = from_elt.slopeTo(to_elts)
         times = explorer.time(path_lengths, slopes)
         g = self.map.getGravity()
@@ -308,7 +308,7 @@ class astarSolver(SEXTANTSolver):
 
             # perform search
             raw = pextant_cpp.astar_solve(source, target,
-                                          lambda a: 0.0,  # self.cost_function._getHeuristicCost(*a),
+                                          lambda a: self.cost_function._getHeuristicCost(*a),
                                           self.G.n)
 
             # if we have a good result

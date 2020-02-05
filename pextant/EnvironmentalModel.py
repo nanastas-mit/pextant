@@ -9,7 +9,7 @@ from pextant.mesh.abstractmesh import GeoMesh, EnvironmentalModel, \
     SearchKernel, coordinate_transform, Dataset, NpDataset
 from pextant.mesh.abstractcomponents import MeshCollection
 from pextant.mesh.concretecomponents import MeshElement
-from pathlib2 import Path
+from pathlib import Path
 from itertools import count
 
 class GDALDataset(Dataset):
@@ -137,11 +137,12 @@ class GridMeshModel(EnvironmentalModel):
     def __init__(self, *arg, **kwargs):
         super(GridMeshModel, self).__init__(*arg, **kwargs)
         self.dataset_unmasked = self.data.filled(0) if isinstance(self.data, np.ma.core.MaskedArray) else self.data
-        self.isvaliddata = np.logical_not(self.data.mask)  if isinstance(self.data, np.ma.core.MaskedArray) \
+        self.isvaliddata = np.logical_not(self.data.mask) if isinstance(self.data, np.ma.core.MaskedArray) \
             else np.ones_like(self.data).astype(bool)
         self.searchKernel = SearchKernel(self.kernel_size, self.kernel_type)
         self.ROW_COL = Cartesian(self.nw_geo_point, self.resolution, reverse=True)
         self.COL_ROW = Cartesian(self.nw_geo_point, self.resolution)
+        self.cache_neighbours()
         self.cached_neighbours = self._cache_neighbours() if self.cached else []
 
     def _getMeshElement(self, mesh_coordinates):
@@ -226,35 +227,57 @@ class GridMeshModel(EnvironmentalModel):
 
     #TODO: move to parent class
     def cache_neighbours(self):
+
+        # cached_neighbours is 3 dimensional array of bools
+        #   D1: x-coordinate into grid
+        #   D2: y-coordinate into grid
+        #   D3: kernal element index
+        #     e.g. cached_neighbours[x, y, idx] tells you whether or not point
+        #     <x,y> can reach point <x,y> + kernal_offsets[idx]
         self.cached_neighbours = self._cache_neighbours()
         return self.cached_neighbours
 
     def _cache_neighbours(self):
-        #print('precomputing neighbours')
+
+        # construct array containing all gridpoint coordinates
         rows, cols = np.mgrid[0:self.y_size, 0:self.x_size]
         gridpoints = np.array([rows.flatten(), cols.flatten()]).transpose()
 
+        # create empty [x-size * y-size * kernal-size] matrix 'neighbor_reachability_map'
+        #   each matrix element is array of size 'kernal-size' of boolean values
+        #
         kernel = self.searchKernel
         offsets = kernel.getKernel()
-        s = np.empty((self.shape[0], self.shape[1], len(offsets)), dtype=bool)
-        dr = np.apply_along_axis(np.linalg.norm, 1, offsets) * self.resolution
-        z = self.dataset_unmasked
-        neighbour_size = len(self.searchKernel.getKernel())
-        #slopes_rad = np.empty((self.shape[0], self.shape[1], neighbour_size))
+        neighbor_reachability_map = np.empty((self.shape[0], self.shape[1], len(offsets)), dtype=bool)
+
+        # cache relative distances of all neighboring nodes to any given node
+        # dr = np.apply_along_axis(np.linalg.norm, 1, offsets) * self.resolution
+
+        # go through all neighbors
         for idx, offset in enumerate(offsets):
+
+            # construct array of candidate neighbor points, where each entry represents the candidate neighbor for the
+            #   corresponding point in 'gridpoints'
             candidate_neighbour_point = gridpoints + offset
-            point_is_neighbour = self._inbounds_bool(candidate_neighbour_point) # if not in bounds, its not a neighbour
+
+            # array of bools corresponding to 'gridpoints' array; value at index indicates if point at 'offset'
+            #   can be a be grdipoint point's neighbor (based exclusively on whether or not that point is within
+            #   bounds of dataset).
+            point_is_neighbour = self._inbounds_bool(candidate_neighbour_point)
+
+            # check to see if 'inbounds' points have valid data
+            #   => update point_is_neighbor with results
             inbound_rows, inbound_cols = candidate_neighbour_point[point_is_neighbour].transpose()
             point_is_neighbour[point_is_neighbour] = self.isvaliddata[inbound_rows, inbound_cols]
+
+            # check to see if 'inbounds & valid' points are passable (no obstacles)
+            #   => update point_is_neighbor with results
             hasdata_rows, hasdata_cols = candidate_neighbour_point[point_is_neighbour].transpose()
             point_is_neighbour[point_is_neighbour] = self.passable[hasdata_rows, hasdata_cols]
-            #dri = dr[idx]
-            #slopes_rad = np.arctan2(np.roll(np.roll(z, -offset[0], axis=0), -offset[1], axis=1) - z, dri)
-            #not_too_steep = np.degrees(slopes_rad) <= self.maxSlope
-            #is_passable = np.reshape(point_is_neighbour, self.shape)
-            #s[:, :, idx] = np.logical_and(is_passable, not_too_steep)
-            s[:,:,idx] = np.reshape(point_is_neighbour, self.shape)
-        return s
+
+            # update reachability map
+            neighbor_reachability_map[:,:,idx] = np.reshape(point_is_neighbour, self.shape)
+        return neighbor_reachability_map
 
 
 def loadElevationMap(fullPath, maxSlope=35, nw_corner=None, se_corner=None, desiredRes=None):
@@ -270,18 +293,22 @@ def load_legacy(filename):
     c = count()
     r = True
 
+    # local function for converting text to number (either int or float)
     def num(s):
         try:
             return int(s)
         except ValueError:
             return float(s)
 
+    # read in the key-value pairs at the top of the file
     with m.open() as f:
         while r:
             next(c)
-            r = re.search("([^\d\W]+)\s+(-*\d+\.*\d*)", f.readline())
+            r = re.search("([^\d\W]+)\s+(-*\d+\.*\d*)", f.readline())  # [letter-only word] + [space] + [int or float value]
             if r:
                 d[r.groups()[0]] = num(r.groups()[1])
+
+    # load text beginning with line after all key-value pairs (should be start of grid-based elevation values)
     l = next(c) - 1
     data = np.loadtxt(str(m.resolve()), skiprows=l)
     dataset = NpDataset(data, resolution=d["cellsize"])

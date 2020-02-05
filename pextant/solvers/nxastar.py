@@ -8,13 +8,12 @@ class GG:
     def __init__(self, solver):
         self.em = solver.env_model
         self.costfx = solver.cost_function.cached["costs"]["energy"]
-        self.nick = 4
 
     def n(self, node):
         traversable_neighbors = self.em.cached_neighbours[node]
         search_kernal = self.em.searchKernel.getKernel()[traversable_neighbors]
         neighbors = np.array(node) + search_kernal
-        w = self.costfx[node[0], node[1], self.em.cached_neighbours[node]]
+        w = self.costfx[node[0], node[1], traversable_neighbors]
         return list(zip(list(map(tuple, neighbors)), w.tolist()))
 
 # Based on networkx's implementation, which cant be used out of

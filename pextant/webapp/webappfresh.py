@@ -5,7 +5,7 @@ sys.path.append('../../')
 from .serialgps import GPSSerialThread, serial_ports, GPSSerialEmulator, RandomThread, FakeEmitter
 from pextant.lib.geoshapely import LAT_LONG, GeoPoint, Cartesian, UTM
 from pextant.analysis.loadWaypoints import JSONloader
-from pathlib2 import Path
+from pathlib import Path
 from DateTime import DateTime
 
 import json

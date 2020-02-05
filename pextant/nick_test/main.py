@@ -9,7 +9,7 @@ from pextant.viz.utils import hillshade
 import time
 
 # create the model
-apollo14_grid_mesh = load_legacy("Apollo14.txt")
+apollo14_grid_mesh = load_legacy("../notebooks/Documentation/Apollo14.txt")
 apollo14_model = apollo14_grid_mesh.loadSubSection(maxSlope=10, cached=True)
 
 # create the agent
@@ -26,6 +26,8 @@ pathfinder_x = astarSolver(apollo14_model, agent, algorithm_type=astarSolver.Alg
 
 # find the optimal path
 start = time.time()
+
+# TODO: split out set waypoints and solve, allow for cacheing of heuristicsHan
 out, _, _ = pathfinder_x_cpp.solvemultipoint(waypoints)
 end = time.time()
 elapsed_x_cpp = end - start
