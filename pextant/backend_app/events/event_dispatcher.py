@@ -32,7 +32,7 @@ class EventDispatcher:
     '''=======================================
     UPDATE
     ======================================='''
-    def update(self):
+    def update(self, delta_time):
 
         # process messages until there are no more
         while True:

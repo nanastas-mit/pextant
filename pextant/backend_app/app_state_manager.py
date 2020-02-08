@@ -1,8 +1,9 @@
-import pextant.backend_app.events.pextant_events as pextant_events
+import pextant.backend_app.events.event_definitions as event_definitions
 import time
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.backend_app.backend_server import PextantServer
 from pextant.backend_app.ui.ui_controller import UIController
+
 
 HOST_NAME = 'localhost'
 HOST_PORT = 3000
@@ -14,6 +15,9 @@ class AppStateManager:
     '''=======================================
     FIELDS
     ======================================='''
+    # 'consts'
+    SECONDS_PER_FRAME = 0.05
+
     # 'enum' for tracking app state
     INITIALIZING = 1
     RUNNING = 2
@@ -31,29 +35,39 @@ class AppStateManager:
 
         # register for events
         self.event_handlers = {
-            pextant_events.START_SERVER: self.start_connection_accept_server,
-            pextant_events.STOP_SERVER: self.stop_connection_accept_server,
-            pextant_events.CLIENT_CONNECTED: self.on_client_connected,
-            pextant_events.SEND_MESSAGE: self.on_send_message,
-            pextant_events.MESSAGE_RECEIVED: self.on_message_received,
-            pextant_events.UI_WINDOW_CLOSED: self.exit,
+            event_definitions.START_SERVER: self.start_connection_accept_server,
+            event_definitions.STOP_SERVER: self.stop_connection_accept_server,
+            event_definitions.CLIENT_CONNECTED: self.on_client_connected,
+            event_definitions.SEND_MESSAGE: self.on_send_message,
+            event_definitions.MESSAGE_RECEIVED: self.on_message_received,
+            event_definitions.UI_WINDOW_CLOSED: self.exit,
         }
         EventDispatcher.get_instance().set_event_listening_group(self.event_handlers, True)
 
+        # initialize time-tracking variables
+        self.start_time = time.time()
+        self.time_last_frame = self.start_time
+        self.delta_time = 0.0
+
+        # initialize registered components list
+        self._registered_components = []
+
         # create the connection server (only job is to listen for client connections)
-        self.server = PextantServer(HOST_NAME, HOST_PORT)
+        self.server = PextantServer(HOST_NAME, HOST_PORT, self)
 
         # if specified, create gui
         if create_gui:
-            self.gui = UIController()
+            self.gui = UIController(self)
         else:
             self.gui = None
             self.server.start_listening()
 
     def exit(self):
 
-        # stop server
-        self.server.close()
+        # exit sub-components
+        for component in self._registered_components:
+            component.close()
+        self.unregister_all_components()
 
         # stop listening for events
         EventDispatcher.get_instance().set_event_listening_group(self.event_handlers, False)
@@ -73,26 +87,29 @@ class AppStateManager:
         try:
             while self.current_state == AppStateManager.RUNNING:
 
-                # update sub-components
-                EventDispatcher.get_instance().update()
-                self.server.update()
-                if self.gui:
-                    self.gui.update()
+                # loop start timings
+                loop_begin_time = time.time()
+                self.delta_time = loop_begin_time - self.time_last_frame
 
-                # input
-                self.handle_input()
+                # update sub-components
+                EventDispatcher.get_instance().update(self.delta_time)
+                for component in self._registered_components:
+                    component.update(self.delta_time)
+
+                # loop end timings
+                self.time_last_frame = loop_begin_time
+                loop_end_time = time.time()
+                total_loop_time = loop_end_time - loop_begin_time
 
                 # wait until next cycle
-                time.sleep(0.033)
+                sleep_time = max(AppStateManager.SECONDS_PER_FRAME - total_loop_time, 0.001)
+                time.sleep(sleep_time)
 
         # on a keyboard interrupt, exit the app
         except KeyboardInterrupt:
             print("caught keyboard interrupt, exiting")
         finally:
             self.exit()
-
-    def handle_input(self):
-        pass
 
     '''=======================================
     EVENT HANDLERS
@@ -115,3 +132,18 @@ class AppStateManager:
         print("sending message ", content)
         self.server.send_message_to_client(self.nick_client, content)
 
+    '''=======================================
+    COMPONENT MANAGEMENT
+    ======================================='''
+    def register_component(self, component):
+
+        if component not in self._registered_components:
+            self._registered_components.append(component)
+
+    def unegister_component(self, component):
+
+        if component in self._registered_components:
+            self._registered_components.remove(component)
+
+    def unregister_all_components(self):
+        self._registered_components.clear()

@@ -1,6 +1,6 @@
 import io
 import json
-import pextant.backend_app.events.pextant_events as pextant_events
+import pextant.backend_app.events.event_definitions as event_definitions
 import sys
 import selectors
 import struct
@@ -184,7 +184,7 @@ class ClientEventHandler:
 
             # dispatch event
             EventDispatcher.get_instance().trigger_event(
-                pextant_events.MESSAGE_RECEIVED,
+                event_definitions.MESSAGE_RECEIVED,
                 self.socket,
                 content)
 

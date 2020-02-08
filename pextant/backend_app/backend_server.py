@@ -1,12 +1,13 @@
-import pextant.backend_app.events.pextant_events as pextant_events
+import pextant.backend_app.events.event_definitions as event_definitions
 import socket
 import selectors
 import traceback
+from pextant.backend_app.app_component import AppComponent
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.backend_app.client_event_handler import ClientEventHandler, SocketClosedException
 
 
-class PextantServer:
+class PextantServer(AppComponent):
     """A simple server used for accepting client connections and handling subsequent communication"""
 
     '''=======================================
@@ -23,7 +24,9 @@ class PextantServer:
     '''=======================================
     STARTUP/SHUTDOWN
     ======================================='''
-    def __init__(self, host_name, host_port):
+    def __init__(self, host_name, host_port, manager):
+
+        super().__init__(manager)
 
         # create selector
         self.selector = selectors.DefaultSelector()
@@ -73,7 +76,9 @@ class PextantServer:
     '''=======================================
     UPDATES
     ======================================='''
-    def update(self):
+    def update(self, delta_time):
+
+        super().update(delta_time)
 
         # if we have no server socket, do nothing
         if self.server_socket is None:
@@ -137,7 +142,7 @@ class PextantServer:
         self.connected_client_handlers[client_socket] = client_event_handler
 
         # dispatch event
-        EventDispatcher.get_instance().trigger_event(pextant_events.CLIENT_CONNECTED, client_socket, address)
+        EventDispatcher.get_instance().trigger_event(event_definitions.CLIENT_CONNECTED, client_socket, address)
 
     def _close_client_socket(self, client_socket):
 

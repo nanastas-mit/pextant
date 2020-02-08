@@ -1,3 +1,5 @@
+import sys
+sys.path.append('../../')
 import argparse
 from pextant.backend_app.app_state_manager import AppStateManager
 
