@@ -25,28 +25,34 @@ class PageAnimationTest(PageBase):
         toggle_anim_btn.pack(pady=10, padx=10)
 
         self.elapsed_time = 0
+        self.cached_bg = None
 
+        # create figure and subplot
         self.figure = Figure(figsize=(5, 5), dpi=64)
         self.sub_plot: Axes = self.figure.add_subplot()
         self.sub_plot.set_xlim(0, 2*np.pi)
         self.sub_plot.set_ylim(-1, 1)
-        self.red_dot = Line2D([0], [np.sin(0)], marker='o', color='r', alpha=1.0, markersize=10)
-        self.sub_plot.add_line(self.red_dot)
-
-        t = np.arange(0.0, 2*np.pi, 0.001)
-        s = np.sin(t)
-        sin_line = Line2D(t, s)
-        self.sub_plot.add_line(sin_line)
 
         # create rendering object
         self.canvas = FigureCanvasTkAgg(self.figure, self)
-        self.canvas.draw()
+        self.redraw_canvas()
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         # add toolbar
         toolbar = NavigationToolbar2Tk(self.canvas, self)
         toolbar.update()
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        # add sine wave background
+        t = np.arange(0.0, 2*np.pi, 0.001)
+        s = np.sin(t)
+        sin_line = Line2D(t, s)
+        self.sub_plot.add_line(sin_line)
+        self.cached_bg = self.canvas.copy_from_bbox(self.sub_plot.bbox)
+
+        # add red dot
+        self.red_dot = Line2D([0], [np.sin(0)], marker='o', color='r', alpha=1.0, markersize=10)
+        self.sub_plot.add_line(self.red_dot)
 
     def page_update(self, delta_time):
 
@@ -61,7 +67,25 @@ class PageAnimationTest(PageBase):
             self.red_dot.set_data(self.elapsed_time, np.sin(self.elapsed_time))
 
             # redraw
-            self.canvas.draw()
+            self.redraw_canvas()
 
     def toggle_anim(self):
         self.do_animation = not self.do_animation
+
+    def redraw_canvas(self, blit=False):
+
+        if blit and self.cached_bg:
+
+            # restore background
+            self.canvas.restore_region(self.cached_bg)
+
+            # redraw lines
+            self.sub_plot.draw_artist(self.red_dot)
+
+            # fill in the axes rectangle
+            self.canvas.blit(self.sub_plot.bbox)
+
+        else:
+
+            # just redraw everything
+            self.canvas.draw()

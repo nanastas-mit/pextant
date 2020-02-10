@@ -168,7 +168,7 @@ class ExplorerCost(aStarCostFunction):
         heuristic_cost = heuristic_weight*(d * np.sqrt(2) * h_diagonal + d * (h_straight - 2 * h_diagonal))
         # This is just Euclidean distance
         #heuristic_cost = d * np.sqrt((start_row - end_row) ** 2 + (start_col - end_col) ** 2)
-        return  heuristic_cost
+        return heuristic_cost
 
     def getCostBetween(self, fromnode, tonodes):
         """:type fromnode: MeshSearchElement"""
@@ -224,13 +224,12 @@ class ExplorerCost(aStarCostFunction):
 class astarSolver(SEXTANTSolver):
 
     # algorithm type 'enum' rather than bool (previously: inhouse=true/false)
-    class AlgorithmType:
-        PY_INHOUSE = 1
-        PY_NETWORKX = 2
-        CPP_NETWORKX = 3
+    PY_INHOUSE = 1
+    PY_NETWORKX = 2
+    CPP_NETWORKX = 3
 
     def __init__(self, env_model, explorer_model, viz=None, optimize_on='Energy',
-                 cached=False, algorithm_type=AlgorithmType.PY_INHOUSE, heuristic_accelerate=1):
+                 cached=False, algorithm_type=PY_INHOUSE, heuristic_accelerate=1):
         self.explorer_model = explorer_model
         self.optimize_on = optimize_on
         self.cache = env_model.cached
@@ -240,22 +239,26 @@ class astarSolver(SEXTANTSolver):
         super(astarSolver, self).__init__(env_model, cost_function, viz)
 
         # if using networkx-based implementation, set G
-        if algorithm_type == astarSolver.AlgorithmType.CPP_NETWORKX or \
-                algorithm_type == astarSolver.AlgorithmType.PY_NETWORKX:
+        if algorithm_type == astarSolver.PY_NETWORKX or \
+                algorithm_type == astarSolver.CPP_NETWORKX:
             self.G = GG(self)
 
     def accelerate(self, weight=10):
         self.cost_function = ExplorerCost(self.explorer_model, self.env_model, self.optimize_on,
                                           self.cache, heuristic_accelerate=weight)
 
-    def solve(self, startpoint, endpoint):
-        if self.algorithm_type == astarSolver.AlgorithmType.CPP_NETWORKX:
+    def get_solve_function(self):
+        if self.algorithm_type == astarSolver.CPP_NETWORKX:
             solver = self.solvenx_cpp
-        elif self.algorithm_type == astarSolver.AlgorithmType.PY_NETWORKX:
+        elif self.algorithm_type == astarSolver.PY_NETWORKX:
             solver = self.solvenx
-        else: # self.algorithm_type == astarSolver.AlgorithmType.PY_INHOUSE
+        else:  # self.algorithm_type == astarSolver.PY_INHOUSE
             solver = self.solveinhouse
-        return solver(startpoint, endpoint)
+        return solver
+
+    def solve(self, startpoint, endpoint):
+        solver = self.get_solve_function()
+        solver(startpoint, endpoint)
 
     def solveinhouse(self, startpoint, endpoint):
         env_model = self.env_model
@@ -294,7 +297,7 @@ class astarSolver(SEXTANTSolver):
         else:
             return False
 
-    def solvenx_cpp(self, startpoint, endpoint):
+    def solvenx_cpp(self, startpoint, endpoint, c1=None, c2=None, c3=None):
 
         # get source and target coordinates
         source = self.env_model.getMeshElement(startpoint).mesh_coordinate
@@ -307,9 +310,19 @@ class astarSolver(SEXTANTSolver):
             self.cost_function.setEndNode(MeshSearchElement(self.env_model.getMeshElement(endpoint)))
 
             # perform search
-            raw = pextant_cpp.astar_solve(source, target,
-                                          lambda a: self.cost_function._getHeuristicCost(*a),
-                                          self.G.n)
+            if c1 and c2 and c3:
+                raw = pextant_cpp.astar_solve_with_callback(
+                    source, target,
+                    lambda a: 0.0,  # self.cost_function._getHeuristicCost(*a),
+                    self.G.n,
+                    c1, c2, c3
+                )
+            else:
+                raw = pextant_cpp.astar_solve(
+                    source, target,
+                    lambda a: self.cost_function._getHeuristicCost(*a),
+                    self.G.n
+                )
 
             # if we have a good result
             if len(raw) > 0:

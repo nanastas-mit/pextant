@@ -1,20 +1,21 @@
 import numpy as np
-import pextant.backend_app.ui.fonts as fonts
 import pextant.backend_app.events.event_definitions as event_definitions
+import pextant.backend_app.ui.fonts as fonts
 import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.axes import Axes
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.colors import LightSource
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from pextant.backend_app.ui.page_base import PageBase
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
-from threading import Thread
-
 from pextant.EnvironmentalModel import load_legacy
-from matplotlib.colors import LightSource
-from pextant.lib.geoshapely import GeoPoint, GeoPolygon
 from pextant.explorers import Astronaut
+from pextant.lib.geoshapely import GeoPoint, GeoPolygon
+from pextant.solvers.SEXTANTsolver import sextantSearchList
 from pextant.solvers.astarMesh import astarSolver
+from threading import Thread
+from threading import Lock
 
 
 class PageFindPath(PageBase):
@@ -113,20 +114,24 @@ class PageFindPath(PageBase):
         self.find_path_btn = None
 
         # graph references
+        self.cached_terrain_image = None
         self.canvas = None
         self.figure = None
         self.sub_plot = None
         self.start_point_line = None
         self.end_point_line = None
-        self.search_path_line = None
+        self.found_path_line = None
+        self.explored_points_line = None
         self.on_click_id = None
 
         # path planning references
         self.start_point = None
         self.end_point = None
         self.terrain_model = None
+        self.agent = Astronaut(80)
+        self.explored_points = {'x': [], 'y': []}
 
-        # thread references
+        # threading references
         self.load_model_thread = None
         self.find_path_thread = None
 
@@ -149,7 +154,7 @@ class PageFindPath(PageBase):
         # buttons
         btn_frame = tk.Frame(self)
         btn_frame.pack()
-        self.load_model_btn = tk.Button(btn_frame, text="Load Model", command=self.load_model)
+        self.load_model_btn = tk.Button(btn_frame, text="Load Model", command=self.load_terrain_model)
         self.load_model_btn.grid(column=1, row=1, padx=4, pady=4)
         self.set_start_btn = tk.Button(btn_frame, text="Set Start", command=self.set_start)
         self.set_start_btn.grid(column=2, row=1, padx=4, pady=4)
@@ -159,20 +164,22 @@ class PageFindPath(PageBase):
         self.find_path_btn.grid(column=4, row=1, padx=4, pady=4)
 
         # create the figure, setup axes
-        self.figure = Figure(figsize=(4, 4), dpi=100)
+        self.figure = Figure(figsize=(4, 4), dpi=60)
         self.sub_plot: Axes = self.figure.add_subplot()
 
         # setup lines
         self.start_point_line = Line2D([], [], linestyle='None', marker='*', color='g', markeredgecolor='k', markersize=10)
         self.end_point_line = Line2D([], [], linestyle='None', marker='X', color='r', markeredgecolor='k', markersize=10)
-        self.search_path_line = Line2D([], [], color='b')
+        self.found_path_line = Line2D([], [], color='b')
+        self.explored_points_line = Line2D([], [], color='r', alpha=0.4)
         self.sub_plot.add_line(self.start_point_line)
         self.sub_plot.add_line(self.end_point_line)
-        self.sub_plot.add_line(self.search_path_line)
+        self.sub_plot.add_line(self.found_path_line)
+        #self.sub_plot.add_line(self.explored_points_line)
 
         # create rendering object
         self.canvas = FigureCanvasTkAgg(self.figure, self)
-        self.canvas.draw()
+        self.redraw_canvas()
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         # add toolbar
@@ -199,18 +206,6 @@ class PageFindPath(PageBase):
             self.find_path_thread.join()
 
     '''=======================================
-    UPDATES
-    ======================================='''
-    def page_update(self, delta_time):
-        # super
-        super().page_update(delta_time)
-
-        self.dude = 1
-
-        # redraw
-        # self.canvas.draw()
-
-    '''=======================================
     EVENT HANDLERS
     ======================================='''
     def on_click(self, event):
@@ -224,10 +219,13 @@ class PageFindPath(PageBase):
                 # set point
                 self.start_point = GeoPoint(self.terrain_model.COL_ROW, event.xdata, event.ydata)
 
+                # clear path (we've moved the start => old path no longer valid)
+                self.found_path_line.set_data([], [])
+
                 # set line (i.e. draw point)
                 converted_point = self.start_point.to(self.terrain_model.COL_ROW)
                 self.start_point_line.set_data([converted_point[0]], [converted_point[1]])
-                self.canvas.draw()
+                self.redraw_canvas()
 
                 # we're done!
                 self.state = PageFindPath.STATE_READY
@@ -237,10 +235,13 @@ class PageFindPath(PageBase):
                 # set point
                 self.end_point = GeoPoint(self.terrain_model.COL_ROW, event.xdata, event.ydata)
 
+                # clear path (we've moved the end => old path no longer valid)
+                self.found_path_line.set_data([], [])
+
                 # set line (i.e. draw point)
                 converted_point = self.end_point.to(self.terrain_model.COL_ROW)
                 self.end_point_line.set_data([converted_point[0]], [converted_point[1]])
-                self.canvas.draw()
+                self.redraw_canvas()
 
                 # we're done!
                 self.state = PageFindPath.STATE_READY
@@ -250,25 +251,42 @@ class PageFindPath(PageBase):
         # should be coming from loading the model
         assert self.state == PageFindPath.STATE_LOADING_MODEL
 
+        # redraw and cache just-loaded (speeds up future redraws)
+        self.redraw_canvas()
+        self.cached_terrain_image = self.canvas.copy_from_bbox(self.sub_plot.bbox)
+
         # redraw and note that we're done loading
         self.load_model_thread = None
         self.state = PageFindPath.STATE_READY
-        self.canvas.draw()
 
     def on_path_found(self):
 
         # should be coming from finding path
         assert self.state == PageFindPath.STATE_FINDING_PATH
 
+        # draw explored
+        self.explored_points_line.set_data(self.explored_points['x'], self.explored_points['y'])
+
         # redraw and note that we're done path-finding
         self.find_path_thread = None
         self.state = PageFindPath.STATE_READY
-        self.canvas.draw()
+        self.redraw_canvas()
+
+    def on_explored(self, coordinate):
+
+        self.explored_points['x'].append(coordinate[1])
+        self.explored_points['y'].append(coordinate[0])
+
+    def on_added_to_queue(self, coordinate):
+        pass
+
+    def on_removed_from_queue(self, coordinate):
+        pass
 
     '''=======================================
     PATH CREATION
     ======================================='''
-    def load_model(self):
+    def load_terrain_model(self):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
@@ -277,7 +295,7 @@ class PageFindPath(PageBase):
             self.state = PageFindPath.STATE_LOADING_MODEL
 
             # start new thread to handle loading
-            self.load_model_thread = Thread(name="Load Model", target=self.load_model_run)
+            self.load_model_thread = Thread(name="Load Model", target=self.load_terrain_model_threaded)
             self.load_model_thread.start()
 
     def set_start(self):
@@ -317,44 +335,78 @@ class PageFindPath(PageBase):
             self.state = PageFindPath.STATE_FINDING_PATH
 
             # kick off thread to find path
-            self.find_path_thread = Thread(name="Find Path", target=self.find_path_run)
+            self.find_path_thread = Thread(name="Find Path", target=self.find_path_threaded)
             self.find_path_thread.start()
 
     '''=======================================
-    THREADS
+    THREADED FUNCTIONS
     ======================================='''
-    def load_model_run(self):
+    def load_terrain_model_threaded(self):
 
         # create the model
         apollo14_grid_mesh = load_legacy("../notebooks/Documentation/Apollo14.txt")
         self.terrain_model = apollo14_grid_mesh.loadSubSection(maxSlope=10, cached=True)
 
-        # create the image
+        # create the terrain image
         weight = 1.0
         res = self.terrain_model.resolution
         exaggeration = res * weight
         ls = LightSource(azdeg=315, altdeg=45)
-        img = ls.hillshade(self.terrain_model.dataset_unmasked,
-                           vert_exag=exaggeration, dx=res, dy=res)
+        img = ls.hillshade(self.terrain_model.dataset_unmasked, vert_exag=exaggeration, dx=res, dy=res)
         self.sub_plot.imshow(img, cmap='gray')
+
+        # create obstacle image
+        self.sub_plot.imshow(self.terrain_model.obstacle_mask(), alpha=0.5, cmap='bwr_r')
 
         # dispatch loaded event
         EventDispatcher.get_instance().trigger_event(event_definitions.TERRAIN_MODEL_LOADED)
 
-    def find_path_run(self):
-
-        # create the agent
-        agent = Astronaut(80)
-
-        # define list of waypoints (just 2 here - start and end)
-        waypoints = GeoPolygon([self.start_point, self.end_point])
+    def find_path_threaded(self):
 
         # create the solver
-        solver = astarSolver(self.terrain_model, agent, algorithm_type=astarSolver.AlgorithmType.CPP_NETWORKX)
+        solver = astarSolver(
+            self.terrain_model,
+            self.agent,
+            algorithm_type=astarSolver.CPP_NETWORKX
+        )
 
         # TODO: split out set waypoints and solve, allow for cacheing of heuristicsHan
-        out, _, _ = solver.solvemultipoint(waypoints)
-        self.search_path_line.set_data(*out.coordinates().to(self.terrain_model.COL_ROW))
+        waypoints = GeoPolygon([self.start_point, self.end_point])
+        search_result = solver.solvenx_cpp(
+            waypoints[0], waypoints[1])
+
+        # update line data
+
+        #search_list = sextantSearchList(waypoints)
+        #search_list.append(search_result)
+        #self.found_path_line.set_data(*search_list.coordinates().to(self.terrain_model.COL_ROW))
+        xs = [p[1] for p in search_result.raw]
+        ys = [p[0] for p in search_result.raw]
+        self.found_path_line.set_data(xs, ys)
 
         # dispatch path found event
         EventDispatcher.get_instance().trigger_event(event_definitions.PATH_FOUND)
+
+    '''=======================================
+    HELPERS
+    ======================================='''
+    def redraw_canvas(self, blit=False):
+
+        if blit and self.cached_terrain_image:
+
+            # restore background
+            self.canvas.restore_region(self.cached_terrain_image)
+
+            # redraw lines
+            self.sub_plot.draw_artist(self.start_point_line)
+            self.sub_plot.draw_artist(self.end_point_line)
+            self.sub_plot.draw_artist(self.found_path_line)
+            self.sub_plot.draw_artist(self.explored_points_line)
+
+            # fill in the axes rectangle
+            self.canvas.blit(self.sub_plot.bbox)
+
+        else:
+
+            # just redraw everything
+            self.canvas.draw()

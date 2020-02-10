@@ -133,7 +133,7 @@ class Cartesian(GeoType):
         return Cartesian(self.origin, self.resolution, not self.reversed)
 
     def to_utm(self, geo_point):
-        return  UTM(self.zone)
+        return UTM(self.zone)
 
     def getargs(self, geo_points):
         # next line should ideally be super.getargs, but we overwrite the fx so not sure if possible
@@ -241,7 +241,7 @@ class GeoPolygon(GeoObject, LineString):
     def __init__(self, firstarg, *args):
         # TODO: not sure if np.array is needed, check
         if isinstance(firstarg, list):
-            x= [p.x for p in firstarg]
+            x = [p.x for p in firstarg]
             y = [p.y for p in firstarg]
             geo_type = firstarg[0].utm_reference
         elif isinstance(args[0], shapely.coords.CoordinateSequence):
