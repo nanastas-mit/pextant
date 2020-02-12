@@ -11,11 +11,10 @@ from pextant.backend_app.ui.page_base import PageBase
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.EnvironmentalModel import load_legacy
 from pextant.explorers import Astronaut
-from pextant.lib.geoshapely import GeoPoint, GeoPolygon
-from pextant.solvers.SEXTANTsolver import sextantSearchList
-from pextant.solvers.astarMesh import astarSolver
+from pextant.lib.geoshapely import GeoPoint
+from pextant.solvers.astarMesh import ExplorerCost, MeshSearchElement
+from pextant_cpp import PathFinder
 from threading import Thread
-from threading import Lock
 
 
 class PageFindPath(PageBase):
@@ -29,7 +28,8 @@ class PageFindPath(PageBase):
     STATE_LOADING_MODEL = 2
     STATE_SETTING_START = 3
     STATE_SETTING_END = 4
-    STATE_FINDING_PATH = 5
+    STATE_CACHING_DATA = 5
+    STATE_FINDING_PATH = 6
 
     # by-state text lookup ui objects
     NOTIFICATION_LBL_TEXT = {
@@ -37,6 +37,7 @@ class PageFindPath(PageBase):
         STATE_LOADING_MODEL: "Loading Model...",
         STATE_SETTING_START: "Setting Start...",
         STATE_SETTING_END: "Setting End...",
+        STATE_CACHING_DATA: "Caching Data...",
         STATE_FINDING_PATH: "Finding Path...",
     }
 
@@ -57,6 +58,7 @@ class PageFindPath(PageBase):
             # standard configuration
             self.load_model_btn['state'] = tk.DISABLED
             self.find_path_btn['state'] = tk.DISABLED
+            self.cache_costs_btn['state'] = tk.DISABLED
             self.set_start_btn['state'] = tk.DISABLED
             self.set_start_btn['text'] = "Set Start"
             self.set_end_btn['state'] = tk.DISABLED
@@ -80,6 +82,10 @@ class PageFindPath(PageBase):
                 self.set_end_btn['state'] = tk.NORMAL
                 self.set_end_btn['text'] = "Cancel"
 
+            # CACHING
+            elif self.__state == PageFindPath.STATE_CACHING_DATA:
+                pass  # everything is standard
+
             # FINDING PATH
             elif self.__state == PageFindPath.STATE_FINDING_PATH:
                 pass  # everything is standard
@@ -89,11 +95,18 @@ class PageFindPath(PageBase):
 
                 # enable / disable buttons based on existence of parameters
                 self.load_model_btn['state'] = tk.DISABLED if self.terrain_model else tk.NORMAL
+                self.cache_costs_btn['state'] = \
+                    tk.NORMAL if not self.data_cached and self.end_point \
+                    else tk.DISABLED
                 self.find_path_btn['state'] = \
-                    tk.NORMAL if self.terrain_model and self.start_point and self.end_point \
+                    tk.NORMAL if self.data_cached and self.terrain_model and self.start_point and self.end_point \
                     else tk.DISABLED
                 self.set_start_btn['state'] = tk.NORMAL if self.terrain_model else tk.DISABLED
                 self.set_end_btn['state'] = tk.NORMAL if self.terrain_model else tk.DISABLED
+
+    @property
+    def data_cached(self):
+        return self.path_finder.cached
 
     '''=======================================
     STARTUP/SHUTDOWN
@@ -102,7 +115,8 @@ class PageFindPath(PageBase):
 
         super().__init__(master, {
             event_definitions.TERRAIN_MODEL_LOADED: self.on_terrain_model_loaded,
-            event_definitions.PATH_FOUND: self.on_path_found
+            event_definitions.COST_CACHING_COMPLETE: self.on_caching_complete,
+            event_definitions.PATH_FOUND: self.on_path_found,
         })
 
         # ui references
@@ -111,6 +125,7 @@ class PageFindPath(PageBase):
         self.load_model_btn = None
         self.set_start_btn = None
         self.set_end_btn = None
+        self.cache_costs_btn = None
         self.find_path_btn = None
 
         # graph references
@@ -121,18 +136,18 @@ class PageFindPath(PageBase):
         self.start_point_line = None
         self.end_point_line = None
         self.found_path_line = None
-        self.explored_points_line = None
         self.on_click_id = None
 
         # path planning references
+        self.path_finder = PathFinder()
+        self.agent = Astronaut(80)
+        self.terrain_model = None
         self.start_point = None
         self.end_point = None
-        self.terrain_model = None
-        self.agent = Astronaut(80)
-        self.explored_points = {'x': [], 'y': []}
 
         # threading references
         self.load_model_thread = None
+        self.cache_costs_thread = None
         self.find_path_thread = None
 
         # do initial setup
@@ -160,22 +175,22 @@ class PageFindPath(PageBase):
         self.set_start_btn.grid(column=2, row=1, padx=4, pady=4)
         self.set_end_btn = tk.Button(btn_frame, text="Set End", command=self.set_end)
         self.set_end_btn.grid(column=3, row=1, padx=4, pady=4)
+        self.cache_costs_btn = tk.Button(btn_frame, text="Cache Costs", command=self.cache_data)
+        self.cache_costs_btn.grid(column=4, row=1, padx=4, pady=4)
         self.find_path_btn = tk.Button(btn_frame, text="Start Search", command=self.find_path)
-        self.find_path_btn.grid(column=4, row=1, padx=4, pady=4)
+        self.find_path_btn.grid(column=5, row=1, padx=4, pady=4)
 
         # create the figure, setup axes
-        self.figure = Figure(figsize=(4, 4), dpi=60)
+        self.figure = Figure(figsize=(3, 3), dpi=100)
         self.sub_plot: Axes = self.figure.add_subplot()
 
         # setup lines
         self.start_point_line = Line2D([], [], linestyle='None', marker='*', color='g', markeredgecolor='k', markersize=10)
         self.end_point_line = Line2D([], [], linestyle='None', marker='X', color='r', markeredgecolor='k', markersize=10)
         self.found_path_line = Line2D([], [], color='b')
-        self.explored_points_line = Line2D([], [], color='r', alpha=0.4)
         self.sub_plot.add_line(self.start_point_line)
         self.sub_plot.add_line(self.end_point_line)
         self.sub_plot.add_line(self.found_path_line)
-        #self.sub_plot.add_line(self.explored_points_line)
 
         # create rendering object
         self.canvas = FigureCanvasTkAgg(self.figure, self)
@@ -202,6 +217,8 @@ class PageFindPath(PageBase):
         # wait for existing threads to complete
         if self.load_model_thread:
             self.load_model_thread.join()
+        if self.cache_costs_thread:
+            self.cache_costs_thread.join()
         if self.find_path_thread:
             self.find_path_thread.join()
 
@@ -213,37 +230,45 @@ class PageFindPath(PageBase):
         # if we clicked somewhere in the graph area
         if event.xdata and event.ydata:
 
+            point_changed = False
+
             # if setting  start...
             if self.state == PageFindPath.STATE_SETTING_START:
+
+                point_changed = True
 
                 # set point
                 self.start_point = GeoPoint(self.terrain_model.COL_ROW, event.xdata, event.ydata)
 
-                # clear path (we've moved the start => old path no longer valid)
-                self.found_path_line.set_data([], [])
-
                 # set line (i.e. draw point)
                 converted_point = self.start_point.to(self.terrain_model.COL_ROW)
                 self.start_point_line.set_data([converted_point[0]], [converted_point[1]])
-                self.redraw_canvas()
 
-                # we're done!
-                self.state = PageFindPath.STATE_READY
-
+            # otherwise, if setting end...
             elif self.state == PageFindPath.STATE_SETTING_END:
+
+                point_changed = True
 
                 # set point
                 self.end_point = GeoPoint(self.terrain_model.COL_ROW, event.xdata, event.ydata)
 
-                # clear path (we've moved the end => old path no longer valid)
-                self.found_path_line.set_data([], [])
-
                 # set line (i.e. draw point)
                 converted_point = self.end_point.to(self.terrain_model.COL_ROW)
                 self.end_point_line.set_data([converted_point[0]], [converted_point[1]])
+
+                # clear cached costs
+                self.clear_cached_data()
+
+            # if something changed
+            if point_changed:
+
+                # clear path (we've moved the end => old path no longer valid)
+                self.found_path_line.set_data([], [])
+
+                # redraw (for updated points and paths)
                 self.redraw_canvas()
 
-                # we're done!
+                # head back to ready state
                 self.state = PageFindPath.STATE_READY
 
     def on_terrain_model_loaded(self):
@@ -259,29 +284,24 @@ class PageFindPath(PageBase):
         self.load_model_thread = None
         self.state = PageFindPath.STATE_READY
 
+    def on_caching_complete(self):
+
+        # should be coming from caching
+        assert self.state == PageFindPath.STATE_CACHING_DATA
+
+        # ready for the next thing
+        self.cache_costs_thread = None
+        self.state = PageFindPath.STATE_READY
+
     def on_path_found(self):
 
         # should be coming from finding path
         assert self.state == PageFindPath.STATE_FINDING_PATH
 
-        # draw explored
-        self.explored_points_line.set_data(self.explored_points['x'], self.explored_points['y'])
-
         # redraw and note that we're done path-finding
         self.find_path_thread = None
         self.state = PageFindPath.STATE_READY
         self.redraw_canvas()
-
-    def on_explored(self, coordinate):
-
-        self.explored_points['x'].append(coordinate[1])
-        self.explored_points['y'].append(coordinate[0])
-
-    def on_added_to_queue(self, coordinate):
-        pass
-
-    def on_removed_from_queue(self, coordinate):
-        pass
 
     '''=======================================
     PATH CREATION
@@ -326,6 +346,23 @@ class PageFindPath(PageBase):
             # cancel (i.e. do nothing and return to ready)
             self.state = PageFindPath.STATE_READY
 
+    def cache_data(self):
+
+        # if we're not doing anything else
+        if self.state == PageFindPath.STATE_READY:
+
+            # note that we've started the caching
+            self.state = PageFindPath.STATE_CACHING_DATA
+
+            # kick off thread to find path
+            self.cache_costs_thread = Thread(name="Cache Costs", target=self.cache_data_threaded)
+            self.cache_costs_thread.start()
+
+    def clear_cached_data(self):
+
+        # clear cache
+        self.path_finder.clear_cache()
+
     def find_path(self):
 
         # if we're not doing anything else
@@ -361,27 +398,43 @@ class PageFindPath(PageBase):
         # dispatch loaded event
         EventDispatcher.get_instance().trigger_event(event_definitions.TERRAIN_MODEL_LOADED)
 
+    def cache_data_threaded(self):
+
+        # should be in caching mode
+        assert self.state == PageFindPath.STATE_CACHING_DATA
+
+        # setup cost function (costs and heuristics cached)
+        cost_function = ExplorerCost(self.agent, self.terrain_model, 'Energy', cached=True)
+        cost_function.setEndNode(MeshSearchElement(self.terrain_model.getMeshElement(self.end_point)))
+
+        # list-ify the cost, obstacles, heuristic, and kernel
+        cost_map = cost_function.cached["costs"]["energy"].tolist()
+        obstacle_map = self.terrain_model.obstacle_mask().tolist()
+        h_map = cost_function.cached["heuristics"].tolist()
+        kernel_list = self.terrain_model.searchKernel.getKernel().tolist()
+
+        # do the caching
+        self.path_finder.prepare_cache(cost_map, obstacle_map, h_map, kernel_list)
+
+        # dispatch caching complete event
+        EventDispatcher.get_instance().trigger_event(event_definitions.COST_CACHING_COMPLETE)
+
     def find_path_threaded(self):
 
-        # create the solver
-        solver = astarSolver(
-            self.terrain_model,
-            self.agent,
-            algorithm_type=astarSolver.CPP_NETWORKX
-        )
+        # should be in path finding mode
+        assert self.state == PageFindPath.STATE_FINDING_PATH
 
-        # TODO: split out set waypoints and solve, allow for cacheing of heuristicsHan
-        waypoints = GeoPolygon([self.start_point, self.end_point])
-        search_result = solver.solvenx_cpp(
-            waypoints[0], waypoints[1])
+        # reset any prior progress
+        self.path_finder.reset_progress()
+
+        # solve!
+        source = self.terrain_model.getMeshElement(self.start_point).mesh_coordinate  # unscaled (row, column)
+        target = self.terrain_model.getMeshElement(self.end_point).mesh_coordinate  # unscaled (row, column)
+        search_result = self.path_finder.astar_solve(source, target)
 
         # update line data
-
-        #search_list = sextantSearchList(waypoints)
-        #search_list.append(search_result)
-        #self.found_path_line.set_data(*search_list.coordinates().to(self.terrain_model.COL_ROW))
-        xs = [p[1] for p in search_result.raw]
-        ys = [p[0] for p in search_result.raw]
+        xs = [p[1] for p in search_result]
+        ys = [p[0] for p in search_result]
         self.found_path_line.set_data(xs, ys)
 
         # dispatch path found event
@@ -392,6 +445,7 @@ class PageFindPath(PageBase):
     ======================================='''
     def redraw_canvas(self, blit=False):
 
+        # this should be faster redraw, but doesn't allow zooming and resizing
         if blit and self.cached_terrain_image:
 
             # restore background
@@ -401,7 +455,6 @@ class PageFindPath(PageBase):
             self.sub_plot.draw_artist(self.start_point_line)
             self.sub_plot.draw_artist(self.end_point_line)
             self.sub_plot.draw_artist(self.found_path_line)
-            self.sub_plot.draw_artist(self.explored_points_line)
 
             # fill in the axes rectangle
             self.canvas.blit(self.sub_plot.bbox)

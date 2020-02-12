@@ -7,8 +7,6 @@
 #include "headers/GraphNode.h"
 #include "headers/Utils.h"
 
-#include <iostream>
-#include <set>
 
 namespace py = pybind11;
 
@@ -17,7 +15,7 @@ namespace pextant
     const int G_COST_PAIR_INDEX = 0;
     const int H_COST_PAIR_INDEX = 0;
 
-    pybind11::tuple GraphCoordinateToPyTuple(const GraphCoordinate& coordinate)
+    py::tuple GraphCoordinateToPyTuple(const GraphCoordinate& coordinate)
     {
         return pybind11::make_tuple(coordinate.first, coordinate.second);
     }

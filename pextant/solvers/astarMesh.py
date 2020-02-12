@@ -8,10 +8,11 @@ from pextant.lib.geoshapely import GeoPoint, GeoPolygon, LONG_LAT
 from pextant.solvers.nxastar import GG, astar_path
 from time import time
 
+
 class MeshSearchElement(aStarSearchNode):
     def __init__(self, mesh_element, parent=None, cost_from_parent=0):
         self.mesh_element = mesh_element
-        self.derived = {} #the point of this is to store in memory expensive calculations we might need later
+        self.derived = {}  #the point of this is to store in memory expensive calculations we might need later
         super(MeshSearchElement, self).__init__(mesh_element.mesh_coordinate, parent, cost_from_parent)
 
     def goalTest(self, goal):
@@ -69,9 +70,16 @@ class ExplorerCost(aStarCostFunction):
         offsets = kernel.getKernel()
         dem = self.map
 
+        # planar (i.e. x-y) distances to all neighbors (by kernel-index)
         dr = np.apply_along_axis(np.linalg.norm, 1, offsets) * self.map.resolution
+
+        # elevations
         z = self.map.dataset_unmasked
+
+        # stored gravity value
         g = self.map.getGravity()
+
+        # initialize arrays for holding costs
         neighbour_size = len(self.map.searchKernel.getKernel())
         slopes_rad = np.empty((dem.shape[0], dem.shape[1], neighbour_size))
         energy_cost = np.empty((dem.shape[0], dem.shape[1], neighbour_size))
@@ -79,43 +87,60 @@ class ExplorerCost(aStarCostFunction):
         path_cost = np.empty((dem.shape[0], dem.shape[1], neighbour_size))
 
         for idx, offset in enumerate(offsets):
+
+            # planar distance to neighbor at {offset}
             dri = dr[idx]
+
+            # angle (in radians) between each node and neighbor at {offset}
             slopes_rad[:, :, idx] = np.arctan2(np.roll(np.roll(z, -offset[0], axis=0), -offset[1], axis=1) - z, dri)
+
+            # calculate {energy cost} and {planar velocity} from slope, distance, and gravity
             energy_cost[:, :, idx], v = self.explorer.energy_expenditure(dri, slopes_rad[:, :, idx], g)
+
+            # time = distance / rate
             time_cost[:,:,idx] = dri/v
+
+            # total, 3-dimensional distance traveled
             path_cost[:,:,idx] = dri/np.cos(slopes_rad[:, :, idx])*np.ones_like(z)
 
         return {'time': time_cost, 'path': path_cost, 'energy': energy_cost}
 
     def cache_heuristic(self, goal):
+
         g_x, g_y = goal
         r = self.map.resolution
+
+        # x and y positions of every point in grid
         y, x = r*np.mgrid[0:self.map.y_size, 0:self.map.x_size]
+
+        # x and y *offsets from goal* of every point in grid
         delta_y, delta_x = np.abs(y - g_y), np.abs(x - g_x)
+
+        # number of (resolution-scaled) diagonal steps you are able to take to reach goal
         h_diagonal = np.minimum(delta_y, delta_x)
+
+        # with no diagonal walking, number of x-axis or y-axis steps (resolution-scaled) needed to take to reach goal
         h_straight = delta_y + delta_x
 
-        # Patel 2010. See page 49 of Aaron's thesis
-        manhattan_distance = (np.sqrt(2)-2) * h_diagonal + h_straight
-        # Could also use euclidean distance
-        # euclidean_distance = np.sqrt(delta_y ** 2 + delta_x ** 2)
+        # total distance to goal if you can only travel left-right, up-down, or along diagonals
+        #   Patel 2010. See page 49 of Aaron's thesis
+        eight_grid_distance = (np.sqrt(2)-2) * h_diagonal + h_straight
 
         # Adding the energy weight
         explorer = self.explorer
         m = explorer.mass
         planet = self.map.planet
 
-        energy_weight = explorer.minenergy[planet](m) #to minimize
-        max_velocity = explorer.maxvelocity # to minimize
+        energy_weight = explorer.minenergy[planet](m)  # to minimize energy cost
+        max_velocity = explorer.maxvelocity  # to minimize time cost
 
         optimize_weights = self.optimize_vector
         optimize_values = np.array([
-            1, # Distance per m
-            max_velocity, # time per m
-            energy_weight # energy per m
+            1,  # Distance per m
+            max_velocity,  # time per m
+            energy_weight  # energy per m
         ])
-        optimize_cost = manhattan_distance * np.dot(optimize_values, optimize_weights)
-        #print(self.heuristic_accelerate)
+        optimize_cost = eight_grid_distance * np.dot(optimize_values, optimize_weights)
         heuristic_cost = self.heuristic_accelerate * optimize_cost
 
         return heuristic_cost
@@ -143,31 +168,22 @@ class ExplorerCost(aStarCostFunction):
         # max number of diagonal steps that can be taken
         h_diagonal = min(abs(start_y - end_y), abs(start_x - end_x))
         h_straight = abs(start_y - end_y) + abs(start_x - end_x)  # Manhattan distance
+        h_oct_grid = np.sqrt(2) * h_diagonal + (h_straight - 2 * h_diagonal)
 
         # Adding the energy weight
         m = self.explorer.mass
-        # Aaron's thesis page 50
-        if self.map.planet == 'Earth':
-            energy_weight = 1.504 * m + 53.298
-        elif self.map.planet == 'Moon' and self.explorer.type == 'Astronaut':
-            energy_weight = 2.295 * m + 52.936
-        elif self.map.planet == 'Moon' and self.explorer.type == 'Rover':
-            p_e = self.explorer.P_e  # this only exists for rovers
-            energy_weight = (0.216 * m + p_e / 4.167)
-        else:
-            # This should not happen
-            raise TypeError("planet/explorer conflict, current planet: ", self.map.planet, "current explorer: ",
-                            self.explorer.type)
+        min_energy_function = self.explorer.minenergy[self.map.planet]
+        min_energy = min_energy_function(m)  # min to keep heuristic admissible
+        max_velocity = self.explorer.maxvelocity  # max v => min time, also to keep heuristic admissible
 
-        max_velocity = 1.6  # the maximum velocity is 1.6 from Marquez 2008
-        d = np.array([1, max_velocity, energy_weight])
-        d = np.dot(d, optimize_vector)
+        # determine value to multiply 'optimal distance' value by to get best admissible heuristic
+        admissible_values = np.array([1, max_velocity, min_energy])
+        admissible_weight = np.dot(admissible_values, optimize_vector)
 
         # Patel 2010. See page 49 of Aaron's thesis
         heuristic_weight = self.heuristic_accelerate
-        heuristic_cost = heuristic_weight*(d * np.sqrt(2) * h_diagonal + d * (h_straight - 2 * h_diagonal))
-        # This is just Euclidean distance
-        #heuristic_cost = d * np.sqrt((start_row - end_row) ** 2 + (start_col - end_col) ** 2)
+        heuristic_cost = heuristic_weight * admissible_weight * h_oct_grid
+
         return heuristic_cost
 
     def getCostBetween(self, fromnode, tonodes):
@@ -247,18 +263,14 @@ class astarSolver(SEXTANTSolver):
         self.cost_function = ExplorerCost(self.explorer_model, self.env_model, self.optimize_on,
                                           self.cache, heuristic_accelerate=weight)
 
-    def get_solve_function(self):
+    def solve(self, startpoint, endpoint):
         if self.algorithm_type == astarSolver.CPP_NETWORKX:
             solver = self.solvenx_cpp
         elif self.algorithm_type == astarSolver.PY_NETWORKX:
             solver = self.solvenx
         else:  # self.algorithm_type == astarSolver.PY_INHOUSE
             solver = self.solveinhouse
-        return solver
-
-    def solve(self, startpoint, endpoint):
-        solver = self.get_solve_function()
-        solver(startpoint, endpoint)
+        return solver(startpoint, endpoint)
 
     def solveinhouse(self, startpoint, endpoint):
         env_model = self.env_model
@@ -285,9 +297,9 @@ class astarSolver(SEXTANTSolver):
         if env_model.elt_hasdata(startpoint) and env_model.elt_hasdata(endpoint):
             if self.G == None:
                 self.G = GG(self)
-            self.cost_function.setEndNode(MeshSearchElement(env_model.getMeshElement(endpoint)))
+            cost_function.setEndNode(MeshSearchElement(env_model.getMeshElement(endpoint)))
             try:
-                raw = astar_path(self.G, start, target, lambda a, b: self.cost_function._getHeuristicCost(*a))
+                raw = astar_path(self.G, start, target, lambda a, b: cost_function.getHeuristicCostRaw(a))
                 coordinates = GeoPolygon(self.env_model.COL_ROW, *np.array(raw).transpose()[::-1])
                 search = sextantSearch(raw, [], coordinates, [])
                 self.searches.append(search)
@@ -297,32 +309,24 @@ class astarSolver(SEXTANTSolver):
         else:
             return False
 
-    def solvenx_cpp(self, startpoint, endpoint, c1=None, c2=None, c3=None):
+    def solvenx_cpp(self, startpoint, endpoint):
 
         # get source and target coordinates
-        source = self.env_model.getMeshElement(startpoint).mesh_coordinate
-        target = self.env_model.getMeshElement(endpoint).mesh_coordinate
+        source = self.env_model.getMeshElement(startpoint).mesh_coordinate  # unscaled (row, column)
+        target = self.env_model.getMeshElement(endpoint).mesh_coordinate  # unscaled (row, column)
 
         # check that we have data at both start and end
         if self.env_model.elt_hasdata(startpoint) and self.env_model.elt_hasdata(endpoint):
 
-            # prepare cost function
+            # prepare heuristic function
             self.cost_function.setEndNode(MeshSearchElement(self.env_model.getMeshElement(endpoint)))
 
             # perform search
-            if c1 and c2 and c3:
-                raw = pextant_cpp.astar_solve_with_callback(
-                    source, target,
-                    lambda a: 0.0,  # self.cost_function._getHeuristicCost(*a),
-                    self.G.n,
-                    c1, c2, c3
-                )
-            else:
-                raw = pextant_cpp.astar_solve(
-                    source, target,
-                    lambda a: self.cost_function._getHeuristicCost(*a),
-                    self.G.n
-                )
+            raw = pextant_cpp.astar_solve(
+                source, target,
+                lambda a: self.cost_function.getHeuristicCostRaw(a),
+                self.G.n
+            )
 
             # if we have a good result
             if len(raw) > 0:

@@ -183,6 +183,7 @@ class Rover(Explorer):  # Rover also extends explorer
         # activities being performed during the exploration
         self.type = 'Rover'
         self.minenergy = {
+            'Earth': lambda m: 0.0,  # rover on earth is not used
             'Moon' : lambda m: 0.216 * m + self.P_e / 4.167
         }
 

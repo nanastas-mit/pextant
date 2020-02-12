@@ -36,7 +36,6 @@ class CMakeBuild(build_ext):
                       '-DPYTHON_EXECUTABLE=' + sys.executable]
 
         cfg = 'Debug' if self.debug else 'Release'
-        print("Nick Hey There! cfg = " + str(cfg))
         build_args = ['--config', cfg]
 
         if platform.system() == "Windows":
@@ -58,7 +57,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name='pextant_cpp',
-    version='1.0.5',
+    version='2.0.0',
     author='Nick Anastas',
     author_email='nanastas@gmail.com',
     description='A collection of cpp implemented functions and classes for use in pextant',

@@ -1,9 +1,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/embed.h>
 #include "headers/Algorithms.h"
-#include "headers/Tests.h"
+#include "headers/PathFinder.h"
 
 namespace py = pybind11;
+using namespace pextant;
 
 #ifdef PEXTANT_DEBUGGING_EXECUTABLE
 PYBIND11_EMBEDDED_MODULE(pextant_cpp, m)
@@ -19,37 +20,33 @@ PYBIND11_MODULE(pextant_cpp, m)
         .. currentmodule:: pextant_cpp
     )pbdoc";
 
-    // astar return test
-    m.def(
-        "test_astar_return",
-        &pextant::TestAstarReturn,
-        py::return_value_policy::take_ownership,
-        "tests the return type of astar_solve"
-    );
-
-    // heuristic fn passing
-    m.def(
-        "test_heuristic_function_passing",
-        &pextant::TestHeuristicFunctionPassing,
-        "tests passing of a heuristic fn"
-    );
-
-    // astar arg test
-    m.def(
-        "test_astar_args",
-        &pextant::TestAstarArgs,
-        "tests astar_solve argument passing"
-    );
-
     // do_astar
     m.def(
         "astar_solve",
-        &pextant::AstarSolve,
+        &AstarSolve,
         py::return_value_policy::take_ownership,
         R"pbdoc(
             astar function
         )pbdoc"
     );
+
+    // pathfinder class
+    py::class_<PathFinder> pathFinder(m, "PathFinder");
+    pathFinder.def(py::init())
+        .def(py::init<PathFinder::Type>())
+        .def_property_readonly("finderType", &PathFinder::getFinderType)
+        .def_property_readonly("cached", &PathFinder::getCached)
+        .def("astar_solve", &PathFinder::AstarSolve)
+        .def("astar_step", &PathFinder::AstarStep)
+        .def("prepare_cache", &PathFinder::PrepareCache)
+        .def("clear_cache", &PathFinder::ClearCache)
+        .def("reset_progress", &PathFinder::ResetProgress)
+        .def("get_astar_result", &PathFinder::GetAstarResult);
+    py::enum_<PathFinder::Type>(pathFinder, "Type")
+        .value("dijkstra", PathFinder::Type::DIJKSTRA)
+        .value("astar", PathFinder::Type::ASTAR)
+        .value("dstar", PathFinder::Type::DSTAR)
+        .export_values();
 
 #ifdef VERSION_INFO
     m.attr("__version__") = VERSION_INFO;

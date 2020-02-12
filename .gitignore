@@ -13,3 +13,5 @@ pextant/analysis/*
 pextant/solvers/*
 pextant/lib/*
 *.xlsx
+pextant_cpp/out/*
+pextant/nick_test/*
