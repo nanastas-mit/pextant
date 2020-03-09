@@ -44,12 +44,10 @@ pybind11_add_module(pextant_cpp
 	scripts/bindings/PextantBindings.cpp
 
 	scripts/headers/PathFinder.h
-	scripts/headers/Algorithms.h
 	scripts/headers/GraphNode.h
 	scripts/headers/Utils.h
 
 	scripts/src/PathFinder.cpp
-	scripts/src/Algorithms.cpp
 	scripts/src/GraphNode.cpp
 	scripts/src/Utils.cpp
 )
@@ -63,13 +61,11 @@ add_executable(pextant_cpp
 	scripts/bindings/PextantBindings.cpp
 	
 	scripts/headers/PathFinder.h
-	scripts/headers/Algorithms.h
 	scripts/headers/GraphNode.h
 	scripts/headers/Tests.h
 	scripts/headers/Utils.h
 	
 	scripts/src/PathFinder.cpp
-	scripts/src/Algorithms.cpp
 	scripts/src/GraphNode.cpp
 	scripts/src/Tests.cpp
 	scripts/src/Utils.cpp

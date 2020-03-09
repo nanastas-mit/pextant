@@ -5,6 +5,7 @@ from pextant.backend_app.app_component import AppComponent
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.backend_app.ui.page_server import PageServer
 from pextant.backend_app.ui.page_find_path import PageFindPath
+from pextant.backend_app.ui.widget_styles import UIStyleManager
 
 from pextant.backend_app.ui.page_animation_test import PageAnimationTest
 
@@ -22,8 +23,11 @@ class UIController(AppComponent):
         # create and setup root
         self.root = tk.Tk()
         self.root.title("Sextant")
-        self.root.geometry('740x520')
+        self.root.geometry('740x620')
         self.root.protocol("WM_DELETE_WINDOW", self.on_window_closed)
+
+        # initialize styles
+        UIStyleManager.initialize_styles()
 
         # create pages
         self.tab_control = ttk.Notebook(self.root)

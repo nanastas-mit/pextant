@@ -9,6 +9,8 @@
 
 namespace pextant
 {
+    typedef std::vector<float> CachedCostDatum;
+
     class PathFinder
     {
         //=====================================
@@ -31,17 +33,31 @@ namespace pextant
         {
             return _finderType;
         }
-        bool getCached()
+        bool getCostsCached()
         {
-            return _cached;
+            return _cachedCostData.size() != 0;
+        }
+        bool getObstaclesCached()
+        {
+            return _cachedObstacleData.size() != 0;
+        }
+        bool getHeuristicsCached()
+        {
+            return _cachedHeuristicData.size() != 0;
+        }
+        bool getAllCached()
+        {
+            return 
+                _kernel.size() != 0 &&
+                getCostsCached() &&
+                getObstaclesCached() &&
+                getHeuristicsCached();
         }
 
     private:
         // --- VARS ---
         // type of this particular finder
         Type _finderType = Type::ASTAR;
-        // whether or not data is currently cached
-        bool _cached = false;
 
         // stores num_rows and num_cols of the graph
         std::pair<int, int> _gridSize = std::make_pair(0, 0);
@@ -50,9 +66,17 @@ namespace pextant
         typedef std::vector<GraphCoordinate> Kernel;
         Kernel _kernel;
 
-        // a num_rows x num_columns 'matrix' that stores 'cost to neighbors' and 'heuristic cost to goal' information
-        typedef std::vector<std::vector<GraphNodeCachedDatum>> NodeDataMatrix;
-        NodeDataMatrix _cachedNodeData;
+        // a num_rows x num_columns 'matrix' that stores cost from node at [row][col] to all neighbors
+        typedef std::vector<std::vector<CachedCostDatum>> CostDataMatrix;
+        CostDataMatrix _cachedCostData;
+
+        // a num_rows x num_columns 'matrix' that stores whether or not node at [row][col] is an obstacle
+        typedef std::vector<std::vector<bool>> ObstacleDataMatrix;
+        ObstacleDataMatrix _cachedObstacleData;
+
+        // a num_rows x num_columns 'matrix' that stores heuristic cost to goal of node at [row][col]
+        typedef std::vector<std::vector<float>> HeuristicDataMatrix;
+        HeuristicDataMatrix _cachedHeuristicData;
 
         // PRIORITY QUEUE q:
         //   create queue for determining which nodes to process next.
@@ -88,29 +112,27 @@ namespace pextant
 
         // solvers
         pybind11::list& AstarSolve(pybind11::tuple source, pybind11::tuple target);
-        bool AstarStep(int steps) {
-            return true;
-        }
-        void PrepareCache(
-            pybind11::list& to_neighbor_costs,
-            pybind11::list& obstacle_map,
-            pybind11::list& to_goal_heuristics,
-            pybind11::list& kernel);
-        void ClearCache()
+        void SetKernel(pybind11::list& kernel);
+        void ClearKernel() { _kernel.swap(Kernel()); }
+        void CacheToNeighborCosts(pybind11::list& to_neighbor_costs);
+        void ClearToNeighborCosts() { _cachedCostData.swap(CostDataMatrix()); }
+        void CacheObstacles(pybind11::list& obstacle_map);
+        void ClearObstacles() { _cachedObstacleData.swap(ObstacleDataMatrix()); }
+        void CacheToGoalHeuristics(pybind11::list& to_goal_heuristics);
+        void ClearToGoalHeuristics() { _cachedHeuristicData.swap(HeuristicDataMatrix()); }
+        void ClearAll()
         {
-            _kernel.swap(Kernel());
-            _cachedNodeData.swap(NodeDataMatrix());
+            ClearKernel();
+            ClearToNeighborCosts();
+            ClearObstacles();
+            ClearToGoalHeuristics();
             _gridSize = std::make_pair(0, 0);
-            _cached = false;
         }
         void ResetProgress()
         {
             _q.swap(GraphNodeQueue());
             _explored.swap(ExploredMap());
             _enqueued.swap(EnqueuedMap());
-        }
-        pybind11::list& GetAstarResult() {
-            return *(new pybind11::list());
         }
 
     private:

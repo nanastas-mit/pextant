@@ -58,14 +58,17 @@ class ExplorerCost(aStarCostFunction):
         self.heuristic_accelerate = heuristic_accelerate
         self.cache = cached
         if cached:
-            self.cached["costs"] = self.cache_costs()
+            self.cache_costs()
 
     def cache_all(self):
         end_y, end_x = self.end_node.y, self.end_node.x
-        self.cached["costs"] = self.cache_costs()
-        self.cached["heuristics"] = self.cache_heuristic((end_x, end_y))
+        self.cache_costs()
+        self.cache_heuristic((end_x, end_y))
 
     def cache_costs(self):
+        self.cached["costs"] = self.create_costs_cache()
+
+    def create_costs_cache(self):
         kernel = self.map.searchKernel
         offsets = kernel.getKernel()
         dem = self.map
@@ -106,25 +109,12 @@ class ExplorerCost(aStarCostFunction):
         return {'time': time_cost, 'path': path_cost, 'energy': energy_cost}
 
     def cache_heuristic(self, goal):
+        self.cached["heuristics"] = self.create_heuristic_cache(goal)
 
-        g_x, g_y = goal
-        r = self.map.resolution
+    def create_heuristic_cache(self, goal):
 
-        # x and y positions of every point in grid
-        y, x = r*np.mgrid[0:self.map.y_size, 0:self.map.x_size]
-
-        # x and y *offsets from goal* of every point in grid
-        delta_y, delta_x = np.abs(y - g_y), np.abs(x - g_x)
-
-        # number of (resolution-scaled) diagonal steps you are able to take to reach goal
-        h_diagonal = np.minimum(delta_y, delta_x)
-
-        # with no diagonal walking, number of x-axis or y-axis steps (resolution-scaled) needed to take to reach goal
-        h_straight = delta_y + delta_x
-
-        # total distance to goal if you can only travel left-right, up-down, or along diagonals
-        #   Patel 2010. See page 49 of Aaron's thesis
-        eight_grid_distance = (np.sqrt(2)-2) * h_diagonal + h_straight
+        # get planar distance to goal from each grid location
+        oct_grid_distance = self.map.get_oct_grid_distance_to_point(goal)
 
         # Adding the energy weight
         explorer = self.explorer
@@ -140,7 +130,7 @@ class ExplorerCost(aStarCostFunction):
             max_velocity,  # time per m
             energy_weight  # energy per m
         ])
-        optimize_cost = eight_grid_distance * np.dot(optimize_values, optimize_weights)
+        optimize_cost = oct_grid_distance * np.dot(optimize_values, optimize_weights)
         heuristic_cost = self.heuristic_accelerate * optimize_cost
 
         return heuristic_cost

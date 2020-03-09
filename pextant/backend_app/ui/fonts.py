@@ -1,2 +1,4 @@
-LARGE_FONT = ("Arial Bold", 24)
-SUBTITLE_FONT = ("Arial Italic", 12)
+LARGE_FONT = ("Arial", 24, "bold underline")
+CELL_TITLE = ("Arial", 10, "underline")
+SUBTITLE_FONT = ("Arial", 12, "italic")
+

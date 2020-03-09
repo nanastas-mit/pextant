@@ -12,11 +12,11 @@ namespace pextant
 {
     py::list& PathFinder::AstarSolve(py::tuple source, py::tuple target)
     {
-        // if nothing cached, early out
-        if (!_cached)
+        // if not everything cached, early out
+        if (!getAllCached())
         {
             // return an empty path
-            printf("No Data Cached - returning");
+            printf("Not all data cached - returning");
             return *(new py::list());
         }
 
@@ -135,60 +135,107 @@ namespace pextant
         return *(new py::list());
     }
 
-    void PathFinder::PrepareCache(
-        py::list& to_neighbor_costs,
-        py::list& obstacle_map,
-        py::list& to_goal_heuristics,
-        py::list& kernel)
+    void PathFinder::SetKernel(py::list& kernel)
     {
         // set kernel
         auto kernelSize = static_cast<int>(py::len(kernel));
-        assert(kernelSize == GraphNodeCachedDatum::KERNEL_SIZE);
-        printf("kernelSize = %d\n", kernelSize);
         _kernel = std::vector<GraphCoordinate>(kernelSize);
         for (int iKernel = 0; iKernel < kernelSize; iKernel++)
         {
             auto py_coord = kernel[iKernel].cast<py::list>();
             _kernel[iKernel] = GraphCoordinate(py_coord[0].cast<int>(), py_coord[1].cast<int>());
         }
+    }
+
+    void PathFinder::CacheToNeighborCosts(pybind11::list& to_neighbor_costs)
+    {
+        // make sure there is a kernel
+        auto kernelSize = _kernel.size();
+        if (kernelSize == 0)
+        {
+            printf("kernel not yet set - returning");
+        }
 
         // determine row and column counts
         auto rowCount = static_cast<int>(py::len(to_neighbor_costs));
-        assert(rowCount > 0 && rowCount == py::len(obstacle_map) && rowCount == py::len(to_goal_heuristics));
-        printf("rowCount = %d\n", rowCount);
         auto columnCount = static_cast<int>(py::len(to_neighbor_costs[0]));
-        assert(columnCount > 0 && columnCount == py::len(obstacle_map[0]) && columnCount == py::len(to_goal_heuristics[0]));
-        printf("columnCount = %d\n", columnCount);
-        _gridSize = std::pair<int, int>(rowCount, columnCount);
+        _gridSize = std::make_pair(rowCount, columnCount);
 
-        // create matrix of node data
-        _cachedNodeData = NodeDataMatrix(rowCount, std::vector<GraphNodeCachedDatum>(columnCount));
-        for (int row = 0; row < rowCount; row++)
+        // create cost matrix
+        _cachedCostData = CostDataMatrix(rowCount, std::vector<CachedCostDatum>(columnCount));
+
+        // populate cost matrix
+        for (int iRow = 0; iRow < rowCount; iRow++)
         {
-            auto py_heuristics_row = to_goal_heuristics[row].cast<py::list>();
-            auto py_costs_row = to_neighbor_costs[row].cast<py::list>();
-            auto obstacles_row = obstacle_map[row].cast<py::list>();
-            for (int col = 0; col < columnCount; col++)
+            auto py_costs_row = to_neighbor_costs[iRow].cast<py::list>();
+            for (int iCol = 0; iCol < columnCount; iCol++)
             {
-                GraphNodeCachedDatum& datum = _cachedNodeData[row][col];
+                CachedCostDatum& datum = _cachedCostData[iRow][iCol];
+                datum.reserve(kernelSize);
+                datum.clear();
 
-                // set heuristic
-                datum.heuristic = py_heuristics_row[col].cast<float>();
-
-                // set obstacle status
-                datum.isObstacle = obstacles_row[col].cast<bool>();
-
-                // set neighbor costs
-                auto py_costs_list = py_costs_row[col].cast<py::list>();
-                for (int iKernel = 0; iKernel < GraphNodeCachedDatum::KERNEL_SIZE; iKernel++)
+                // store neighbor costs
+                auto py_costs_list = py_costs_row[iCol].cast<py::list>();
+                for (int iKernel = 0; iKernel < kernelSize; iKernel++)
                 {
-                    datum.toNeighborCosts[iKernel] = py_costs_list[iKernel].cast<float>();
+                    datum.push_back(py_costs_list[iKernel].cast<float>());
                 }
             }
         }
+    }
 
-        // note that we are cached
-        _cached = true;
+    void PathFinder::CacheObstacles(pybind11::list& obstacle_map)
+    {
+        // make sure gridsize is set
+        if (_gridSize.first == 0 || _gridSize.second == 0)
+        {
+            printf("grid size not yet set (must perform cost caching first) - returning");
+        }
+
+        // get/verify row and column counts
+        auto rowCount = static_cast<int>(py::len(obstacle_map));
+        auto columnCount = static_cast<int>(py::len(obstacle_map[0]));
+        assert(_gridSize.first == rowCount && _gridSize.second == columnCount);
+
+        // create obstacle matrix
+        _cachedObstacleData = ObstacleDataMatrix(rowCount, std::vector<bool>(columnCount));
+
+        // populate obstacle matrix
+        for (int iRow = 0; iRow < rowCount; iRow++)
+        {
+            auto py_obstacles_row = obstacle_map[iRow].cast<py::list>();
+            for (int iCol = 0; iCol < columnCount; iCol++)
+            {
+                _cachedObstacleData[iRow][iCol] = py_obstacles_row[iCol].cast<bool>();
+            }
+        }
+    }
+
+    void PathFinder::CacheToGoalHeuristics(pybind11::list& to_goal_heuristics)
+    {
+        // make sure gridsize is set
+        if (_gridSize.first == 0 || _gridSize.second == 0)
+        {
+            printf("grid size not yet set (must perform cost caching first) - returning");
+        }
+
+        // get/verify row and column counts
+        auto rowCount = static_cast<int>(py::len(to_goal_heuristics));
+        auto columnCount = static_cast<int>(py::len(to_goal_heuristics[0]));
+        assert(_gridSize.first == rowCount && _gridSize.second == columnCount);
+
+        // create obstacle matrix
+        _cachedHeuristicData = HeuristicDataMatrix(rowCount, std::vector<float>(columnCount));
+
+        // populate obstacle matrix
+        for (int iRow = 0; iRow < rowCount; iRow++)
+        {
+            auto py_obstacles_row = to_goal_heuristics[iRow].cast<py::list>();
+            for (int iCol = 0; iCol < columnCount; iCol++)
+            {
+                _cachedHeuristicData[iRow][iCol] = py_obstacles_row[iCol].cast<float>();
+            }
+        }
     }
 
     bool PathFinder::TryGetNeighborAtKernelIndex(
@@ -218,14 +265,14 @@ namespace pextant
         }
 
         // check to see if neighbor is obstacle
-        if (_cachedNodeData[outNeighbor.coordinate.first][outNeighbor.coordinate.second].isObstacle)
+        if (_cachedObstacleData[outNeighbor.coordinate.first][outNeighbor.coordinate.second])
         {
             outCost = -1.f;
             return false;
         }
 
         // a valid neighbor!
-        outCost = _cachedNodeData[node.coordinate.first][node.coordinate.second].toNeighborCosts[kernelIndex];
+        outCost = _cachedCostData[node.coordinate.first][node.coordinate.second][kernelIndex];
         return true;
     }
 
@@ -236,6 +283,6 @@ namespace pextant
             node.coordinate.second >= 0 && node.coordinate.second < _gridSize.second);
 
         // return the heuristic
-        return _cachedNodeData[node.coordinate.first][node.coordinate.second].heuristic;
+        return _cachedHeuristicData[node.coordinate.first][node.coordinate.second];
     }
 }

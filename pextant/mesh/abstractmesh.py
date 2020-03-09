@@ -5,6 +5,7 @@ from pextant.lib.geoshapely import GeoPoint, GeoPolygon, GeoEnvelope, Cartesian,
 from scipy.interpolate import NearestNDInterpolator, RegularGridInterpolator, griddata
 from scipy.ndimage.interpolation import zoom
 from skimage.draw import circle
+from pextant.explorers import Astronaut
 
 class GeoMesh(object):
     def __init__(self, nw_geo_point, dataset, planet='Earth',
@@ -166,12 +167,57 @@ class EnvironmentalModel(GeoMesh):
         self.maxSlopeObstacle(self.maxSlope)
 
     def obstacle_mask(self, maxslope = None):
-        if maxslope == None:
+        if maxslope is None:
             obstacles = self.obstacles
         else:
             obstacles = self.slopes > maxslope
-        return np.ma.masked_array(np.ones_like(self.data),
-                                                  np.logical_not(obstacles))
+        return np.ma.masked_array(np.ones_like(self.data), np.logical_not(obstacles))
+
+    def set_circular_obstacle(self, center, radius, state=True):
+
+        euclidean_dist_sq = self.get_euclidean_distance_sq_to_point(center)
+        added_mask = euclidean_dist_sq < radius * radius
+        self.obstacles[added_mask] = state
+
+    def get_xy_distance_grids_to_point(self, point):
+
+        point_x = point[0]
+        point_y = point[1]
+
+        # value of cell in grid 'x' is x-coord, value of cell in grid 'y' is y-coord
+        r = self.resolution
+        y, x = r*np.mgrid[0:self.y_size, 0:self.x_size]
+
+        # x and y *offsets from goal* of every point in grid
+        return np.abs(y - point_y), np.abs(x - point_x)
+
+    def get_euclidean_distance_sq_to_point(self, point):
+
+        # x and y *offsets from goal* of every point in grid
+        delta_y, delta_x = self.get_xy_distance_grids_to_point(point)
+
+        # return the squared distance (no sqrt)
+        return np.square(delta_x) + np.square(delta_y)
+
+    def get_euclidean_distance_to_point(self, point):
+
+        return np.sqrt(self.get_euclidean_distance_sq_to_point(point))
+
+    def get_oct_grid_distance_to_point(self, point):
+
+        # x and y *offsets from goal* of every point in grid
+        delta_y, delta_x = self.get_xy_distance_grids_to_point(point)
+
+        # number of (resolution-scaled) diagonal steps you are able to take to reach goal
+        h_diagonal = np.minimum(delta_y, delta_x)
+
+        # with no diagonal walking, number of x-axis or y-axis steps (resolution-scaled) needed to take to reach goal
+        h_straight = delta_y + delta_x
+
+        # total distance to goal if you can only travel left-right, up-down, or along diagonals
+        #   Patel 2010. See page 49 of Aaron's thesis
+        return (np.sqrt(2)-2) * h_diagonal + h_straight
+
     def convert_coordinates(self, geo_coordinates): pass
 
     def setSlopes(self): pass
@@ -279,5 +325,6 @@ if __name__ == '__main__':
     from pextant.mesh.triangularmesh import grid_to_tri, TriMeshModel
 
     environment = GridMeshModel(nw_geo_point, NpDataset(raster), cached=True)
+    explorer = Astronaut(80)
     solver = astarSolver(environment, explorer)
     sol = solver.solve((0, 0), (20, 20))

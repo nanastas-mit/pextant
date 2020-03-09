@@ -209,7 +209,7 @@ class GridMeshModel(EnvironmentalModel):
         return len(self._hasdata(mesh_coordinate)) > 0
 
     def maxSlopeObstacle(self, maxSlope):
-        self.obstacles = self.slopes > maxSlope
+        self.obstacles = self.slopes > maxSlope  # TODO - do we need an absolute value here?
         self.passable = np.logical_not(self.obstacles)
 
     def _isPassable(self, mesh_coordinates):

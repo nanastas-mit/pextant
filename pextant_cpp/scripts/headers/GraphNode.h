@@ -8,16 +8,6 @@
 
 namespace pextant
 {
-    struct GraphNodeCachedDatum
-    {
-        // should set this dynamically based on passed-in kernel size, but I want to keep memory contiguous
-        static const int KERNEL_SIZE = 8;
-
-        float toNeighborCosts[KERNEL_SIZE];
-        float heuristic = 0.f;
-        bool isObstacle = false;
-    };
-
     // first = row, second = column
     typedef std::pair<int, int> GraphCoordinate;
 

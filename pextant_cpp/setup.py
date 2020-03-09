@@ -57,7 +57,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name='pextant_cpp',
-    version='2.0.0',
+    version='3.0.0',
     author='Nick Anastas',
     author_email='nanastas@gmail.com',
     description='A collection of cpp implemented functions and classes for use in pextant',
