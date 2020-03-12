@@ -1,7 +1,7 @@
 import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.ui.fonts as fonts
 import tkinter as tk
-import tkinter.ttk as ttk
+from pextant.backend_app import messages
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.backend_app.ui.page_base import PageBase
 from itertools import count
@@ -75,8 +75,13 @@ class PageServer(PageBase):
         value_tx = tk.Entry(self, width=20, justify=tk.LEFT)
         value_tx.grid(column=2, row=send_button_row, sticky=tk.W)
         def send_message():
-            greet_msg = {"action": action_tx.get(), "value": value_tx.get()}
-            EventDispatcher.get_instance().trigger_event(event_definitions.SEND_MESSAGE, greet_msg)
+            msg_type = messages.MESSAGE_TYPE_SIMPLE
+            msg_content = {"action": action_tx.get(), "value": value_tx.get()}
+            EventDispatcher.get_instance().trigger_event(
+                event_definitions.SEND_MESSAGE,
+                msg_type,
+                msg_content
+            )
         send_message_btn = tk.Button(self, text="Send Message", command=send_message, justify=tk.LEFT)
         send_message_btn.grid(column=0, row=send_button_row, sticky=tk.W)
 

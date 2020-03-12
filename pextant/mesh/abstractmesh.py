@@ -173,11 +173,15 @@ class EnvironmentalModel(GeoMesh):
             obstacles = self.slopes > maxslope
         return np.ma.masked_array(np.ones_like(self.data), np.logical_not(obstacles))
 
+    def set_array_obstacle(self, obstacle_array, state=True):
+
+        self.obstacles[obstacle_array] = state
+
     def set_circular_obstacle(self, center, radius, state=True):
 
         euclidean_dist_sq = self.get_euclidean_distance_sq_to_point(center)
         added_mask = euclidean_dist_sq < radius * radius
-        self.obstacles[added_mask] = state
+        self.set_array_obstacle(added_mask, state)
 
     def get_xy_distance_grids_to_point(self, point):
 

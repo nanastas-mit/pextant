@@ -1,4 +1,6 @@
 import re
+from PIL import Image
+from PIL.PngImagePlugin import PngImageFile
 
 import numpy.ma as ma
 from osgeo import gdal, osr
@@ -317,6 +319,26 @@ def load_legacy(filename):
     else:
         gp = GeoPoint(UTM(1), d["xllcorner"], d["yllcorner"])
     return GridMesh(gp, dataset)
+
+def load_obstacle_map(filename):
+
+    # load the image
+    img: PngImageFile = Image.open(filename, 'r')
+    pixel_values = list(img.getdata())
+
+    # create a 'zero elevation' model with same dimensions as image
+    data = np.zeros((img.height, img.width), dtype=float)
+    dataset = NpDataset(data, resolution=1.0)
+    gp = GeoPoint(UTM(1), 0, 0)
+    grid_mesh = GridMesh(gp, dataset)
+    model = grid_mesh.loadSubSection(maxSlope=90, cached=True)
+
+    # add the obstacles to the model
+    obstacle_map = np.array(np.logical_not(pixel_values))  # 'black' (i.e. '0') values are obstacles, want to only those
+    obstacle_map = obstacle_map.reshape(img.height, img.width)
+    model.set_array_obstacle(obstacle_map)
+
+    return model
 
 if __name__ == '__main__':
     from pextant.lib.utils import gridpoints_list

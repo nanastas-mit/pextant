@@ -128,9 +128,9 @@ class AppStateManager:
     def on_message_received(socket, data):
         print("message received ", socket, data)
 
-    def on_send_message(self, content):
-        print("sending message ", content)
-        self.server.send_message_to_client(self.nick_client, content)
+    def on_send_message(self, msg_type, msg_content):
+        print(f"sending message {msg_type}, {msg_content}")
+        self.server.send_message_to_client(self.nick_client, msg_type, msg_content)
 
     '''=======================================
     COMPONENT MANAGEMENT

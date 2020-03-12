@@ -20,18 +20,16 @@ class ClientEventHandler:
     ======================================='''
     PROTO_HEADER_LENGTH = 4  # size of unsigned long
 
-    CONTENT_TYPE_KEY = "content_type"
+    MESSAGE_TYPE_KEY = "message_type"
     CONTENT_ENCODING_KEY = "content_encoding"
     BYTE_ORDER_KEY = "byteorder"
     CONTENT_LENGTH_KEY = "content_length"
     HEADER_REQUIRED_FIELDS = (
-        CONTENT_TYPE_KEY,
+        MESSAGE_TYPE_KEY,
         CONTENT_ENCODING_KEY,
         BYTE_ORDER_KEY,
         CONTENT_LENGTH_KEY,
     )
-
-    CONTENT_TYPE_JSON = "text/json"
 
     '''=======================================
     STARTUP/SHUTDOWN
@@ -175,22 +173,15 @@ class ClientEventHandler:
         serialized_content = self._recv_buffer[:content_length]
         self._recv_buffer = self._recv_buffer[content_length:]
 
-        # if json type
-        if self.jsonheader[ClientEventHandler.CONTENT_TYPE_KEY] == ClientEventHandler.CONTENT_TYPE_JSON:
+        # convert from json
+        encoding = self.jsonheader[ClientEventHandler.CONTENT_ENCODING_KEY]
+        content = self._json_decode(serialized_content, encoding)
 
-            # convert from json
-            encoding = self.jsonheader[ClientEventHandler.CONTENT_ENCODING_KEY]
-            content = self._json_decode(serialized_content, encoding)
-
-            # dispatch event
-            EventDispatcher.get_instance().trigger_event(
-                event_definitions.MESSAGE_RECEIVED,
-                self.socket,
-                content)
-
-        # other conversion types
-        else:
-            print(f'received {self.jsonheader[ClientEventHandler.CONTENT_TYPE_KEY]} request from {self.address}')
+        # dispatch event
+        EventDispatcher.get_instance().trigger_event(
+            event_definitions.MESSAGE_RECEIVED,
+            self.socket,
+            content)
 
         # reset everything back to original state
         self._reset_after_read()
@@ -244,46 +235,37 @@ class ClientEventHandler:
                     self.close()
             '''
 
-    def enqueue_message(self, content):
+    def enqueue_message(self, msg_type, msg_content):
 
         # set writeable
         self._set_selector_events_mask("rw")
 
-        # create message (as python dictionary)
-        message = self._create_message_json_content(content)
+        # create message
+        content_encoding = "utf-8"
+        content_bytes = self._json_encode(msg_content, "utf-8")
 
         # serialize the message
-        serialized_message = self._serialize_message(**message)
+        serialized_message = self._serialize_message(msg_type, content_encoding, content_bytes)
         self._send_buffer += serialized_message
 
-    def _create_message_json_content(self, content):
+    def _serialize_message(self, message_type, content_encoding, content_bytes):
 
-        response = {
-            "content_type": ClientEventHandler.CONTENT_TYPE_JSON,
-            "content_encoding": "utf-8",
-            "content_bytes": self._json_encode(content, "utf-8"),
-        }
-        return response
-
-    def _serialize_message(
-        self, *, content_bytes, content_type, content_encoding
-    ):
         # create header as a python dictionary
-        jsonheader = {
-            ClientEventHandler.CONTENT_TYPE_KEY: content_type,
+        json_header = {
+            ClientEventHandler.MESSAGE_TYPE_KEY: message_type,
             ClientEventHandler.CONTENT_ENCODING_KEY: content_encoding,
             ClientEventHandler.BYTE_ORDER_KEY: sys.byteorder,
             ClientEventHandler.CONTENT_LENGTH_KEY: len(content_bytes),
         }
 
         # convert dictionary header to json byte string
-        jsonheader_bytes = self._json_encode(jsonheader, "utf-8")
+        json_header_bytes = self._json_encode(json_header, "utf-8")
 
         # create the proto header
-        proto_header = struct.pack("<i", len(jsonheader_bytes))
+        proto_header = struct.pack("<i", len(json_header_bytes))
 
         # form the entire message and return
-        message = proto_header + jsonheader_bytes + content_bytes
+        message = proto_header + json_header_bytes + content_bytes
         return message
 
     def _reset_after_write(self):

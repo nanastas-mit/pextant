@@ -7,11 +7,12 @@ import tkinter as tk
 import threading
 from itertools import count
 from pextant.backend_app.client_event_handler import ClientEventHandler
+import pextant.backend_app.messages as messages
 
 HOST_NAME = 'localhost'
 HOST_PORT = 3000
 
-CONTENT_TYPE_KEY = ClientEventHandler.CONTENT_TYPE_KEY
+MESSAGE_TYPE_KEY = ClientEventHandler.MESSAGE_TYPE_KEY
 CONTENT_ENCODING_KEY = ClientEventHandler.CONTENT_ENCODING_KEY
 BYTE_ORDER_KEY = ClientEventHandler.BYTE_ORDER_KEY
 CONTENT_LENGTH_KEY = ClientEventHandler.CONTENT_LENGTH_KEY
@@ -27,33 +28,25 @@ def _json_decode(json_bytes, encoding):
     tiow.close()
     return obj
 
-def _create_message(*, content_bytes, content_type, content_encoding):
+def create_message(action, value):
+
+    print("create_request", action, value)
+
+    message_type = messages.MESSAGE_TYPE_SIMPLE
+    content_encoding = "utf-8"
+    content = {"action": action, "value": value}
+    content_bytes = _json_encode(content, content_encoding)
+
     jsonheader = {
-        CONTENT_TYPE_KEY: content_type,
+        MESSAGE_TYPE_KEY: message_type,
         CONTENT_ENCODING_KEY: content_encoding,
         BYTE_ORDER_KEY: sys.byteorder,
         CONTENT_LENGTH_KEY: len(content_bytes),
     }
-    jsonheader_bytes = _json_encode(jsonheader, "utf-8")
+    jsonheader_bytes = _json_encode(jsonheader, content_encoding)
     message_hdr = struct.pack("<i", len(jsonheader_bytes))
     message = message_hdr + jsonheader_bytes + content_bytes
-    return message
 
-def create_request(action, value):
-
-    print("create_request", action, value)
-
-    content_type = "text/json"
-    content_encoding = "utf-8"
-    content = {"action": action, "value": value}
-
-    request = {
-        "content_bytes": _json_encode(content, content_encoding),
-        "content_type": content_type,
-        "content_encoding": content_encoding,
-    }
-
-    message = _create_message(**request)
     return message
 
 def create_gui(client):
@@ -71,7 +64,7 @@ def create_gui(client):
     def send_message():
         action = "search"
         value = "fun cat facts"
-        msg = create_request(action, value)
+        msg = create_message(action, value)
         client.sendall(msg)
     start_server_btn = tk.Button(root, text="Send Message", command=send_message, justify=tk.LEFT)
     start_server_btn.grid(column=0, row=next(current_row), sticky=tk.W)
@@ -117,10 +110,8 @@ def process_response(_recv_buffer, jsonheader):
     data = _recv_buffer[:content_len]
     _recv_buffer = _recv_buffer[content_len:]
 
-    response = None
-    if jsonheader[CONTENT_TYPE_KEY] == "text/json":
-        encoding = jsonheader[CONTENT_ENCODING_KEY]
-        response = _json_decode(data, encoding)
+    encoding = jsonheader[CONTENT_ENCODING_KEY]
+    response = _json_decode(data, encoding)
 
     return response
 

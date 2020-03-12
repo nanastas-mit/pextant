@@ -1,7 +1,6 @@
 import os
 import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.ui.fonts as fonts
-import PIL
 import tkinter as tk
 import tkinter.ttk as ttk
 from matplotlib.axes import Axes
@@ -14,10 +13,11 @@ from matplotlib.pyplot import Circle
 from os import path as path
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.backend_app.ui.page_base import PageBase
-from pextant.EnvironmentalModel import load_legacy, GDALMesh
+from pextant.backend_app.path_manager import PathManager
+from pextant.EnvironmentalModel import load_legacy, GDALMesh, load_obstacle_map
 from pextant.explorers import Astronaut
 from pextant.lib.geoshapely import GeoPoint
-from pextant.solvers.astarMesh import ExplorerCost, MeshSearchElement
+from pextant.solvers.astarMesh import ExplorerCost
 from pextant_cpp import PathFinder
 from threading import Thread
 
@@ -316,6 +316,8 @@ class PageFindPath(PageBase):
             event.xdata and event.ydata and \
             (event.button == MouseButton.LEFT or event.button == MouseButton.RIGHT):
 
+            event.xdata = round(event.xdata)
+            event.ydata = round(event.ydata)
             clicked_point = GeoPoint(self.terrain_model.COL_ROW, event.xdata, event.ydata)
 
             # if setting obstacle
@@ -427,10 +429,8 @@ class PageFindPath(PageBase):
     # load model
     def setup_load_model_cell(self, cell: BannerCell, cell_frame, cell_data):
 
-        # get list of files in models folder
-        cwd = os.getcwd()
-        models_dir = path.join(cwd, PageFindPath.MODELS_DIRECTORY)
-        model_files = [f for f in os.listdir(models_dir) if path.isfile(path.join(models_dir, f))]
+        # get list of available models
+        model_files = PathManager.get_available_models()
 
         # add model dropdown
         model_dropdown = ttk.Combobox(
@@ -453,6 +453,7 @@ class PageFindPath(PageBase):
             cell_frame,
             from_=0,
             to=90,
+            resolution=5,
             orient=tk.HORIZONTAL,
             command=slider_command
         )
@@ -478,7 +479,10 @@ class PageFindPath(PageBase):
             # otherwise (already have model)
             else:
 
-                # unload the model
+                # broadcast unload model event
+                EventDispatcher.get_instance().trigger_event(event_definitions.UNLOAD_MODEL)
+
+                # clear ui components related to model
                 self.clear_model()
 
                 # refresh UI and redraw
@@ -659,11 +663,12 @@ class PageFindPath(PageBase):
 
         # add radius slider
         def slider_command(value):
-            self.obstacle_radius = int(value)
+            self.obstacle_radius = float(value)
         radius_slider = tk.Scale(
             cell_frame,
-            from_=5,
+            from_=0.5,
             to=50,
+            resolution=0.5,
             orient=tk.HORIZONTAL,
             command=slider_command
         )
@@ -754,16 +759,17 @@ class PageFindPath(PageBase):
         local_path_file_name = path.join(PageFindPath.MODELS_DIRECTORY, self.model_to_load)
         _, extension = path.splitext(local_path_file_name)
 
-        # text file is 'legacy'
-        if extension == '.txt':
+        # load the model
+        if extension == '.txt':  # text file is 'legacy'
             grid_mesh = load_legacy(local_path_file_name)
-
-        # otherwise, regular load
-        else:
+            self.terrain_model = grid_mesh.loadSubSection(maxSlope=self.max_slope, cached=False)
+        elif extension == '.png':  # .png is obstacle 'maze'
+            self.terrain_model = load_obstacle_map(local_path_file_name)
+        else:  # otherwise, a DEM
             grid_mesh = GDALMesh(local_path_file_name)
+            self.terrain_model = grid_mesh.loadSubSection(maxSlope=self.max_slope, cached=False)
 
-        # load the model, kernel, cost function
-        self.terrain_model = grid_mesh.loadSubSection(maxSlope=self.max_slope, cached=True)
+        # load the kernel, cost function
         kernel_list = self.terrain_model.searchKernel.getKernel().tolist()
         self.path_finder.set_kernel(kernel_list)
         self.cost_function = ExplorerCost(self.agent, self.terrain_model, 'Energy', cached=False)
@@ -779,9 +785,6 @@ class PageFindPath(PageBase):
         # create obstacle image
         self.obstacle_img = self.sub_plot.imshow(self.terrain_model.obstacle_mask(), alpha=0.5, cmap='bwr_r')
 
-        # dispatch loaded event
-        EventDispatcher.get_instance().trigger_event(event_definitions.TERRAIN_MODEL_LOADED)
-
     def cache_costs_threaded(self):
 
         # should be in caching mode
@@ -794,31 +797,6 @@ class PageFindPath(PageBase):
 
         # dispatch caching complete event
         EventDispatcher.get_instance().trigger_event(event_definitions.COSTS_CACHING_COMPLETE)
-
-    def cache_obstacles_threaded(self):
-
-        # should be in caching mode
-        assert self.state == PageFindPath.STATE_CACHING_DATA
-
-        # list-ify the obstacles and store in pathfinder
-        obstacle_map = self.terrain_model.obstacle_mask().tolist()
-        self.path_finder.cache_obstacles(obstacle_map)
-
-        # dispatch caching complete event
-        EventDispatcher.get_instance().trigger_event(event_definitions.OBSTACLES_CACHING_COMPLETE)
-
-    def cache_heuristics_threaded(self):
-
-        # should be in caching mode
-        assert self.state == PageFindPath.STATE_CACHING_DATA
-
-        # cache heuristics in pathfinder
-        elt = self.terrain_model.getMeshElement(self.end_point)
-        heuristics_map = self.cost_function.create_heuristic_cache((elt.x, elt.y)).tolist()
-        self.path_finder.cache_heuristics(heuristics_map)
-
-        # dispatch caching complete event
-        EventDispatcher.get_instance().trigger_event(event_definitions.HEURISTICS_CACHING_COMPLETE)
 
     def find_path_threaded(self):
 
@@ -895,20 +873,9 @@ class PageFindPath(PageBase):
     ======================================='''
     def clear_model(self):
 
-        # unload model, cost function
-        self.terrain_model = None
-        self.cost_function = None
-
-        # clear out cached data in path finder
-        self.path_finder.clear_all()
-
         # terrain/images
         self.model_img.remove()
         self.obstacle_img.remove()
-
-        # start/end
-        self.start_point = None
-        self.end_point = None
 
         # artists
         self.start_point_line.set_data([], [])

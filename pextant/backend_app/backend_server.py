@@ -119,14 +119,14 @@ class PextantServer(AppComponent):
     '''=======================================
     CONNECTED CLIENTS
     ======================================='''
-    def send_message_to_client(self, client_socket, content):
+    def send_message_to_client(self, client_socket, msg_type, msg_content):
 
         # if client is in list of connected
         if client_socket in self.connected_client_handlers:
 
             # get handler and send a message
             client_event_handler = self.connected_client_handlers[client_socket]
-            client_event_handler.enqueue_message(content)
+            client_event_handler.enqueue_message(msg_type, msg_content)
 
     def _accept_pending_connection(self):
 
