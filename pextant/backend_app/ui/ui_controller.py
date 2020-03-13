@@ -44,7 +44,7 @@ class UIController(AppComponent):
         for page in self.pages:
             page.page_closed()
 
-        EventDispatcher.get_instance().trigger_event(event_definitions.UI_WINDOW_CLOSED)
+        EventDispatcher.instance().trigger_event(event_definitions.UI_WINDOW_CLOSED)
 
     '''=======================================
     UPDATES

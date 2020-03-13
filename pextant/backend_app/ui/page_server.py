@@ -55,9 +55,9 @@ class PageServer(PageBase):
 
         # start/stop server
         def start_server():
-            EventDispatcher.get_instance().trigger_event(event_definitions.START_SERVER)
+            EventDispatcher.instance().trigger_event(event_definitions.START_SERVER)
         def stop_server():
-            EventDispatcher.get_instance().trigger_event(event_definitions.STOP_SERVER)
+            EventDispatcher.instance().trigger_event(event_definitions.STOP_SERVER)
         self.start_server_btn = tk.Button(self, text="Start Server", command=start_server, justify=tk.LEFT)
         self.start_server_btn.grid(column=0, row=next(current_row), sticky=tk.W)
         self.stop_server_btn = tk.Button(self, text="Stop Server", command=stop_server, justify=tk.LEFT)
@@ -77,7 +77,7 @@ class PageServer(PageBase):
         def send_message():
             msg_type = messages.MESSAGE_TYPE_SIMPLE
             msg_content = {"action": action_tx.get(), "value": value_tx.get()}
-            EventDispatcher.get_instance().trigger_event(
+            EventDispatcher.instance().trigger_event(
                 event_definitions.SEND_MESSAGE,
                 msg_type,
                 msg_content

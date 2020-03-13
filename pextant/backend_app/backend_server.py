@@ -142,7 +142,7 @@ class PextantServer(AppComponent):
         self.connected_client_handlers[client_socket] = client_event_handler
 
         # dispatch event
-        EventDispatcher.get_instance().trigger_event(event_definitions.CLIENT_CONNECTED, client_socket, address)
+        EventDispatcher.instance().trigger_event(event_definitions.CLIENT_CONNECTED, client_socket, address)
 
     def _close_client_socket(self, client_socket):
 

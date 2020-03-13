@@ -2,6 +2,8 @@ import pextant.backend_app.events.event_definitions as event_definitions
 import time
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.backend_app.backend_server import PextantServer
+from pextant.backend_app.dependency_injection import FeatureBroker
+from pextant.backend_app.path_manager import PathManager
 from pextant.backend_app.ui.ui_controller import UIController
 
 
@@ -33,6 +35,14 @@ class AppStateManager:
         # set current state
         self.current_state = AppStateManager.INITIALIZING
 
+        # initialize time-tracking variables
+        self.start_time = time.time()
+        self.time_last_frame = self.start_time
+        self.delta_time = 0.0
+
+        # initialize registered components list
+        self._registered_components = []
+
         # register for events
         self.event_handlers = {
             event_definitions.START_SERVER: self.start_connection_accept_server,
@@ -42,17 +52,13 @@ class AppStateManager:
             event_definitions.MESSAGE_RECEIVED: self.on_message_received,
             event_definitions.UI_WINDOW_CLOSED: self.exit,
         }
-        EventDispatcher.get_instance().set_event_listening_group(self.event_handlers, True)
+        EventDispatcher.instance().set_event_listening_group(self.event_handlers, True)
 
-        # initialize time-tracking variables
-        self.start_time = time.time()
-        self.time_last_frame = self.start_time
-        self.delta_time = 0.0
+        # create the path manager
+        self.path_manager = PathManager(self)
+        FeatureBroker.instance().provide("path_manager", self.path_manager)
 
-        # initialize registered components list
-        self._registered_components = []
-
-        # create the connection server (only job is to listen for client connections)
+        # create the connection server
         self.server = PextantServer(HOST_NAME, HOST_PORT, self)
 
         # if specified, create gui
@@ -70,7 +76,7 @@ class AppStateManager:
         self.unregister_all_components()
 
         # stop listening for events
-        EventDispatcher.get_instance().set_event_listening_group(self.event_handlers, False)
+        EventDispatcher.instance().set_event_listening_group(self.event_handlers, False)
 
         # signal we should stop main loop
         self.current_state = AppStateManager.PENDING_EXIT
@@ -92,7 +98,7 @@ class AppStateManager:
                 self.delta_time = loop_begin_time - self.time_last_frame
 
                 # update sub-components
-                EventDispatcher.get_instance().update(self.delta_time)
+                EventDispatcher.instance().update(self.delta_time)
                 for component in self._registered_components:
                     component.update(self.delta_time)
 
@@ -136,12 +142,10 @@ class AppStateManager:
     COMPONENT MANAGEMENT
     ======================================='''
     def register_component(self, component):
-
         if component not in self._registered_components:
             self._registered_components.append(component)
 
     def unegister_component(self, component):
-
         if component in self._registered_components:
             self._registered_components.remove(component)
 

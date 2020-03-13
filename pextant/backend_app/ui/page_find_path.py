@@ -1,4 +1,3 @@
-import os
 import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.ui.fonts as fonts
 import tkinter as tk
@@ -10,16 +9,10 @@ from matplotlib.colors import LightSource
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.pyplot import Circle
-from os import path as path
+from pextant.backend_app.dependency_injection import RequiredFeature, has_attributes
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
-from pextant.backend_app.ui.page_base import PageBase
 from pextant.backend_app.path_manager import PathManager
-from pextant.EnvironmentalModel import load_legacy, GDALMesh, load_obstacle_map
-from pextant.explorers import Astronaut
-from pextant.lib.geoshapely import GeoPoint
-from pextant.solvers.astarMesh import ExplorerCost
-from pextant_cpp import PathFinder
-from threading import Thread
+from pextant.backend_app.ui.page_base import PageBase
 
 
 class BannerCell:
@@ -93,7 +86,7 @@ class PageFindPath(PageBase):
     STATE_SETTING_START = 3
     STATE_SETTING_END = 4
     STATE_SETTING_OBSTACLE = 5
-    STATE_CACHING_DATA = 6
+    STATE_CACHING_COSTS = 6
     STATE_FINDING_PATH = 7
 
     # by-state text lookup ui objects
@@ -103,7 +96,7 @@ class PageFindPath(PageBase):
         STATE_SETTING_START: "Setting Start...",
         STATE_SETTING_END: "Setting End...",
         STATE_SETTING_OBSTACLE: "Setting Obstacle(s)...",
-        STATE_CACHING_DATA: "Caching Data...",
+        STATE_CACHING_COSTS: "Caching Data...",
         STATE_FINDING_PATH: "Finding Path...",
     }
 
@@ -146,10 +139,6 @@ class PageFindPath(PageBase):
                 btn.refresh()
 
     @property
-    def data_cached(self):
-        return self.path_finder.all_cached
-
-    @property
     def blitting_active(self):
         return self.blitted_texture is not None
 
@@ -187,10 +176,22 @@ class PageFindPath(PageBase):
     def __init__(self, master):
 
         super().__init__(master, {
-            event_definitions.TERRAIN_MODEL_LOADED: self.on_terrain_model_loaded,
-            event_definitions.COSTS_CACHING_COMPLETE: self.on_caching_complete,
-            event_definitions.PATH_FOUND: self.on_path_found,
+            event_definitions.MODEL_LOAD_COMPLETE: self.on_model_loaded,
+            event_definitions.MODEL_UNLOAD_COMPLETE: self.on_model_unloaded,
+            event_definitions.START_POINT_SET_COMPLETE: self.on_start_point_set,
+            event_definitions.END_POINT_SET_COMPLETE: self.on_end_point_set,
+            event_definitions.RADIAL_OBSTACLE_SET_COMPLETE: self.on_obstacles_changed,
+            event_definitions.COSTS_CACHING_COMPLETE: self.on_costs_caching_complete,
+            event_definitions.OBSTACLES_CACHING_COMPLETE: self.refresh_ui,
+            event_definitions.HEURISTICS_CACHING_COMPLETE: self.refresh_ui,
+            event_definitions.PATH_FIND_COMPLETE: self.on_path_found,
         })
+
+        # required features
+        self.path_manager = RequiredFeature(
+            "path_manager",
+            #has_attributes(["path_finder", "terrain_model", "cost_function", "start_point", "end_point"])
+        ).result
 
         # ui references
         self.ui_initialized = False
@@ -215,19 +216,6 @@ class PageFindPath(PageBase):
         self.on_click_id = None
         self.on_move_id = None
         self.on_resize_id = None
-
-        # path planning references
-        self.cost_function = None
-        self.path_finder = PathFinder()
-        self.agent = Astronaut(80)
-        self.terrain_model = None
-        self.start_point = None
-        self.end_point = None
-
-        # threading references
-        self.load_model_thread = None
-        self.cache_costs_thread = None
-        self.find_path_thread = None
 
         # do initial setup
         self.initial_setup()
@@ -294,16 +282,8 @@ class PageFindPath(PageBase):
         self.figure.canvas.mpl_disconnect(self.on_click_id)
         self.figure.canvas.mpl_disconnect(self.on_move_id)
 
-        # wait for existing threads to complete
-        if self.load_model_thread:
-            self.load_model_thread.join()
-        if self.cache_costs_thread:
-            self.cache_costs_thread.join()
-        if self.find_path_thread:
-            self.find_path_thread.join()
-
     '''=======================================
-    EVENT HANDLERS
+    UI EVENT HANDLERS
     ======================================='''
     def on_click(self, event: MouseEvent):
 
@@ -311,35 +291,13 @@ class PageFindPath(PageBase):
         #   -a model is loaded AND
         #   -we left or right clicked somewhere in the graph area AND
         #   -click was a left or right click
-        if \
-            self.terrain_model and \
-            event.xdata and event.ydata and \
-            (event.button == MouseButton.LEFT or event.button == MouseButton.RIGHT):
+        if self.path_manager.terrain_model and \
+                event.xdata and event.ydata and \
+                (event.button == MouseButton.LEFT or event.button == MouseButton.RIGHT):
 
-            event.xdata = round(event.xdata)
-            event.ydata = round(event.ydata)
-            clicked_point = GeoPoint(self.terrain_model.COL_ROW, event.xdata, event.ydata)
-
-            # if setting obstacle
-            if self.state == PageFindPath.STATE_SETTING_OBSTACLE:
-
-                # set the obstacle
-                elt = self.terrain_model.getMeshElement(clicked_point)
-                self.terrain_model.set_circular_obstacle(
-                    (elt.x, elt.y),
-                    self.obstacle_radius * self.terrain_model.resolution,
-                    event.button == MouseButton.LEFT
-                )
-                self.obstacle_img.set_data(self.terrain_model.obstacle_mask())
-
-                # clear cached obstacles
-                self.path_finder.clear_obstacles()
-
-                # clear path (we've changed the cost)
-                self.found_path_line.set_data([], [])
-
-                # re-cached blitted texture (to include the new obstacle)
-                self.re_cache_blitted_texture()
+            # we want whole numbers
+            clicked_row = round(event.ydata)
+            clicked_column = round(event.xdata)
 
             # if setting start or end
             if (self.state == PageFindPath.STATE_SETTING_START or self.state == PageFindPath.STATE_SETTING_END) and \
@@ -348,34 +306,34 @@ class PageFindPath(PageBase):
                 # if setting  start...
                 if self.state == PageFindPath.STATE_SETTING_START:
 
-                    # set point
-                    self.start_point = clicked_point
-                    col_row_point = clicked_point.to(self.terrain_model.COL_ROW)
-
-                    # set line (i.e. draw point)
-                    self.start_point_line.set_data([col_row_point[0]], [col_row_point[1]])
+                    # issue start point set request
+                    EventDispatcher.instance().trigger_event(
+                        event_definitions.START_POINT_SET_REQUESTED,
+                        clicked_row,
+                        clicked_column
+                    )
 
                 # otherwise, if setting end...
                 elif self.state == PageFindPath.STATE_SETTING_END:
 
-                    # set point
-                    self.end_point = clicked_point
-                    col_row_point = clicked_point.to(self.terrain_model.COL_ROW)
+                    # issue end point set request
+                    EventDispatcher.instance().trigger_event(
+                        event_definitions.END_POINT_SET_REQUESTED,
+                        clicked_row,
+                        clicked_column
+                    )
 
-                    # set line (i.e. draw point)
-                    self.end_point_line.set_data([col_row_point[0]], [col_row_point[1]])
+            # if setting obstacle
+            if self.state == PageFindPath.STATE_SETTING_OBSTACLE:
 
-                    # clear cached heuristics
-                    self.path_finder.clear_heuristics()
-
-                # clear path (we've moved an endpoint => old path no longer valid)
-                self.found_path_line.set_data([], [])
-
-                # redraw (for updated points and paths)
-                self.redraw_canvas()
-
-                # head back to ready state
-                self.state = PageFindPath.STATE_READY
+                # issue obstacle set request
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.RADIAL_OBSTACLE_SET_REQUESTED,
+                    clicked_row,
+                    clicked_column,
+                    self.obstacle_radius,
+                    event.button == MouseButton.LEFT
+                )
 
     def on_cursor_move(self, event: MouseEvent):
 
@@ -394,32 +352,99 @@ class PageFindPath(PageBase):
             # re-cache the blitted bits
             self.re_cache_blitted_texture()
 
-    def on_terrain_model_loaded(self):
+    '''=======================================
+    APP EVENT HANDLERS
+    ======================================='''
+    def on_model_loaded(self, terrain_model):
 
         # should be coming from loading the model
         assert self.state == PageFindPath.STATE_LOADING_MODEL
 
+        # create the terrain image
+        weight = 1.0
+        res = terrain_model.resolution
+        exaggeration = res * weight
+        ls = LightSource(azdeg=315, altdeg=45)
+        img = ls.hillshade(terrain_model.dataset_unmasked, vert_exag=exaggeration, dx=res, dy=res)
+        self.model_img = self.sub_plot.imshow(img, cmap='gray')
+
+        # create obstacle image
+        self.obstacle_img = self.sub_plot.imshow(terrain_model.obstacle_mask(), alpha=0.5, cmap='bwr_r')
+
         # redraw and note that we're done loading
         self.redraw_canvas()
-        self.load_model_thread = None
         self.state = PageFindPath.STATE_READY
 
-    def on_caching_complete(self):
+    def on_model_unloaded(self):
+
+        # clear terrain/images
+        if self.model_img:
+            self.model_img.remove()
+            self.model_img = None
+        if self.obstacle_img:
+            self.obstacle_img.remove()
+            self.obstacle_img = None
+
+        # clear artists
+        self.start_point_line.set_data([], [])
+        self.end_point_line.set_data([], [])
+        self.pending_obstacle_artist.set_alpha(0.0)
+        self.found_path_line.set_data([], [])
+
+        # refresh UI and redraw
+        self.refresh_ui()
+        self.redraw_canvas()
+
+    def on_start_point_set(self, row, column):
+        self.on_any_point_set(self.start_point_line, row, column)
+
+    def on_end_point_set(self, row, column):
+        self.on_any_point_set(self.end_point_line, row, column)
+
+    def on_any_point_set(self, set_point_line: Line2D, row, column):
+
+        # set line (i.e. draw point)
+        set_point_line.set_data([column], [row])
+
+        # clear path (we've moved an endpoint => old path no longer valid)
+        self.found_path_line.set_data([], [])
+
+        # redraw (for updated points and paths)
+        self.redraw_canvas()
+
+        # head back to ready state
+        self.state = PageFindPath.STATE_READY
+
+    def on_obstacles_changed(self):
+
+        # update obstacle image
+        self.obstacle_img.set_data(self.path_manager.terrain_model.obstacle_mask())
+
+        # clear path (we've changed the cost)
+        self.found_path_line.set_data([], [])
+
+        # re-cached blitted texture (to include the new obstacle)
+        self.re_cache_blitted_texture()
+
+    def on_costs_caching_complete(self):
 
         # should be coming from caching
-        assert self.state == PageFindPath.STATE_CACHING_DATA
+        assert self.state == PageFindPath.STATE_CACHING_COSTS
 
         # ready for the next thing
-        self.cache_costs_thread = None
         self.state = PageFindPath.STATE_READY
 
-    def on_path_found(self):
+    def on_path_found(self, path):
 
         # should be coming from finding path
         assert self.state == PageFindPath.STATE_FINDING_PATH
 
+        # update line data
+        xs = [node[1] for node in path]
+        ys = [node[0] for node in path]
+        self.found_path_line.set_data(xs, ys)
+
         # redraw and note that we're done path-finding
-        self.find_path_thread = None
         self.state = PageFindPath.STATE_READY
         self.redraw_canvas()
 
@@ -467,27 +492,23 @@ class PageFindPath(PageBase):
         if self.state == PageFindPath.STATE_READY:
 
             # if we don't have a model
-            if not self.terrain_model:
+            if not self.path_manager.terrain_model:
 
                 # note that we're loading
                 self.state = PageFindPath.STATE_LOADING_MODEL
 
-                # start new thread to handle loading
-                self.load_model_thread = Thread(name="Load Model", target=self.load_terrain_model_threaded)
-                self.load_model_thread.start()
+                # issue load model request
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.MODEL_LOAD_REQUESTED,
+                    self.model_to_load,
+                    self.max_slope
+                )
 
             # otherwise (already have model)
             else:
 
-                # broadcast unload model event
-                EventDispatcher.get_instance().trigger_event(event_definitions.UNLOAD_MODEL)
-
-                # clear ui components related to model
-                self.clear_model()
-
-                # refresh UI and redraw
-                self.refresh_ui()
-                self.redraw_canvas()
+                # issue unload model request
+                EventDispatcher.instance().trigger_event(event_definitions.MODEL_UNLOAD_REQUESTED)
 
     def refresh_load_model_cell(self, cell: BannerCell):
 
@@ -495,7 +516,7 @@ class PageFindPath(PageBase):
 
         # standard configuration
         btn['state'] = tk.DISABLED
-        btn['text'] = "Load Model" if not self.terrain_model else "Unload Model"
+        btn['text'] = "Load Model" if not self.path_manager.terrain_model else "Unload Model"
 
         # READY
         if self.state == PageFindPath.STATE_READY:
@@ -531,36 +552,26 @@ class PageFindPath(PageBase):
         if self.state == PageFindPath.STATE_READY:
 
             # note that we've started caching
-            self.state = PageFindPath.STATE_CACHING_DATA
+            self.state = PageFindPath.STATE_CACHING_COSTS
 
-            # kick off thread to cache costs
-            self.cache_costs_thread = Thread(name="Cache Costs", target=self.cache_costs_threaded)
-            self.cache_costs_thread.start()
+            # issue cost caching request
+            EventDispatcher.instance().trigger_event(event_definitions.COSTS_CACHING_REQUESTED)
 
     def cache_obstacles_command(self):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
 
-            # list-ify the obstacles and store in pathfinder
-            obstacle_map = self.terrain_model.obstacle_mask().tolist()
-            self.path_finder.cache_obstacles(obstacle_map)
-
-            # refresh UI
-            self.refresh_ui()
+            # issue obstacles caching request
+            EventDispatcher.instance().trigger_event(event_definitions.OBSTACLES_CACHING_REQUESTED)
 
     def cache_heuristics_command(self):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
 
-            # cache heuristics in pathfinder
-            elt = self.terrain_model.getMeshElement(self.end_point)
-            heuristics_map = self.cost_function.create_heuristic_cache((elt.x, elt.y)).tolist()
-            self.path_finder.cache_heuristics(heuristics_map)
-
-            # refresh UI
-            self.refresh_ui()
+            # issue heuristic caching request
+            EventDispatcher.instance().trigger_event(event_definitions.HEURISTICS_CACHING_REQUESTED)
 
     def refresh_cache_data_cell(self, cell: BannerCell):
 
@@ -576,13 +587,23 @@ class PageFindPath(PageBase):
         # READY
         if self.state == PageFindPath.STATE_READY:
 
-            # enable / disable buttons based on existence of parameters
-            costs_btn['state'] = \
-                tk.NORMAL if not self.path_finder.costs_cached and self.cost_function else tk.DISABLED
-            obstacles_btn['state'] = \
-                tk.NORMAL if not self.path_finder.obstacles_cached and self.terrain_model else tk.DISABLED
-            heuristics_btn['state'] = \
-                tk.NORMAL if not self.path_finder.heuristics_cached and self.end_point else tk.DISABLED
+            # costs
+            if not self.path_manager.path_finder.costs_cached and self.path_manager.cost_function:
+                costs_btn['state'] = tk.NORMAL
+            else:
+                costs_btn['state'] = tk.DISABLED
+
+            # obstacles
+            if not self.path_manager.path_finder.obstacles_cached and self.path_manager.terrain_model:
+                obstacles_btn['state'] = tk.NORMAL
+            else:
+                obstacles_btn['state'] = tk.DISABLED
+
+            # heuristics
+            if not self.path_manager.path_finder.heuristics_cached and self.path_manager.end_point:
+                heuristics_btn['state'] = tk.NORMAL
+            else:
+                heuristics_btn['state'] = tk.DISABLED
 
     # set endpoints
     def setup_set_endpoints_cell(self, cell: BannerCell, cell_frame, cell_data):
@@ -655,8 +676,8 @@ class PageFindPath(PageBase):
         elif self.state == PageFindPath.STATE_READY:
 
             # enable / disable buttons based on existence of parameters
-            start_btn['state'] = tk.NORMAL if self.terrain_model else tk.DISABLED
-            end_btn['state'] = tk.NORMAL if self.terrain_model else tk.DISABLED
+            start_btn['state'] = tk.NORMAL if self.path_manager.terrain_model else tk.DISABLED
+            end_btn['state'] = tk.NORMAL if self.path_manager.terrain_model else tk.DISABLED
 
     # set obstacles
     def setup_set_obstacle_cell(self, cell: BannerCell, cell_frame, cell_data):
@@ -719,7 +740,7 @@ class PageFindPath(PageBase):
         if self.state == PageFindPath.STATE_READY:
 
             # enable / disable buttons based on existence of parameters
-            btn['state'] = tk.DISABLED if not self.terrain_model else tk.NORMAL
+            btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
 
     # find path
     def find_path_command(self):
@@ -730,9 +751,8 @@ class PageFindPath(PageBase):
             # note that we've started the path-finding
             self.state = PageFindPath.STATE_FINDING_PATH
 
-            # kick off thread to find path
-            self.find_path_thread = Thread(name="Find Path", target=self.find_path_threaded)
-            self.find_path_thread.start()
+            # issue request for path find
+            EventDispatcher.instance().trigger_event(event_definitions.PATH_FIND_REQUESTED)
 
     def refresh_find_path_cell(self, cell: BannerCell):
 
@@ -745,79 +765,11 @@ class PageFindPath(PageBase):
         if self.state == PageFindPath.STATE_READY:
 
             # enable / disable buttons based on existence of parameters
-            if self.path_finder.all_cached and self.terrain_model and self.start_point and self.end_point:
+            if self.path_manager.path_finder.all_cached and self.path_manager.terrain_model and \
+                    self.path_manager.start_point and self.path_manager.end_point:
                 btn['state'] = tk.NORMAL
             else:
                 btn['state'] = tk.DISABLED
-
-    '''=======================================
-    THREADED FUNCTIONS
-    ======================================='''
-    def load_terrain_model_threaded(self):
-
-        # get the name of the file of the model to load
-        local_path_file_name = path.join(PageFindPath.MODELS_DIRECTORY, self.model_to_load)
-        _, extension = path.splitext(local_path_file_name)
-
-        # load the model
-        if extension == '.txt':  # text file is 'legacy'
-            grid_mesh = load_legacy(local_path_file_name)
-            self.terrain_model = grid_mesh.loadSubSection(maxSlope=self.max_slope, cached=False)
-        elif extension == '.png':  # .png is obstacle 'maze'
-            self.terrain_model = load_obstacle_map(local_path_file_name)
-        else:  # otherwise, a DEM
-            grid_mesh = GDALMesh(local_path_file_name)
-            self.terrain_model = grid_mesh.loadSubSection(maxSlope=self.max_slope, cached=False)
-
-        # load the kernel, cost function
-        kernel_list = self.terrain_model.searchKernel.getKernel().tolist()
-        self.path_finder.set_kernel(kernel_list)
-        self.cost_function = ExplorerCost(self.agent, self.terrain_model, 'Energy', cached=False)
-
-        # create the terrain image
-        weight = 1.0
-        res = self.terrain_model.resolution
-        exaggeration = res * weight
-        ls = LightSource(azdeg=315, altdeg=45)
-        img = ls.hillshade(self.terrain_model.dataset_unmasked, vert_exag=exaggeration, dx=res, dy=res)
-        self.model_img = self.sub_plot.imshow(img, cmap='gray')
-
-        # create obstacle image
-        self.obstacle_img = self.sub_plot.imshow(self.terrain_model.obstacle_mask(), alpha=0.5, cmap='bwr_r')
-
-    def cache_costs_threaded(self):
-
-        # should be in caching mode
-        assert self.state == PageFindPath.STATE_CACHING_DATA
-
-        # cache costs, list-ify, and store in pathfinder
-        cached_costs = self.cost_function.create_costs_cache()
-        cost_map = cached_costs["energy"].tolist()
-        self.path_finder.cache_costs(cost_map)
-
-        # dispatch caching complete event
-        EventDispatcher.get_instance().trigger_event(event_definitions.COSTS_CACHING_COMPLETE)
-
-    def find_path_threaded(self):
-
-        # should be in path finding mode
-        assert self.state == PageFindPath.STATE_FINDING_PATH
-
-        # reset any prior progress
-        self.path_finder.reset_progress()
-
-        # solve!
-        source = self.terrain_model.getMeshElement(self.start_point).mesh_coordinate  # unscaled (row, column)
-        target = self.terrain_model.getMeshElement(self.end_point).mesh_coordinate  # unscaled (row, column)
-        search_result = self.path_finder.astar_solve(source, target)
-
-        # update line data
-        xs = [p[1] for p in search_result]
-        ys = [p[0] for p in search_result]
-        self.found_path_line.set_data(xs, ys)
-
-        # dispatch path found event
-        EventDispatcher.get_instance().trigger_event(event_definitions.PATH_FOUND)
 
     '''=======================================
     DRAWING
@@ -871,18 +823,6 @@ class PageFindPath(PageBase):
     '''=======================================
     HELPERS
     ======================================='''
-    def clear_model(self):
-
-        # terrain/images
-        self.model_img.remove()
-        self.obstacle_img.remove()
-
-        # artists
-        self.start_point_line.set_data([], [])
-        self.end_point_line.set_data([], [])
-        self.pending_obstacle_artist.set_alpha(0.0)
-        self.found_path_line.set_data([], [])
-
     def refresh_ui(self):
         # state property will go through UI elements and refresh them
         self.state = self.state

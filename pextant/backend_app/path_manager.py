@@ -1,6 +1,7 @@
 import os
 import pextant.backend_app.events.event_definitions as event_definitions
 from os import path as path
+from pextant.backend_app.app_component import AppComponent
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.EnvironmentalModel import load_legacy, GDALMesh, load_obstacle_map
 from pextant.explorers import Astronaut
@@ -9,7 +10,7 @@ from pextant.solvers.astarMesh import ExplorerCost
 from pextant_cpp import PathFinder
 
 
-class PathManager:
+class PathManager(AppComponent):
     """class for managing and keeping state of current path/terrain/model"""
 
     '''=======================================
@@ -20,15 +21,21 @@ class PathManager:
     '''=======================================
     STARTUP/SHUTDOWN
     ======================================='''
-    def __init__(self):
+    def __init__(self, manager):
 
-        # singleton check/initialization
-        if PathManager.__instance is not None:
-            raise Exception("This class is a singleton!")
-        else:
-            PathManager.__instance = self
+        super().__init__(manager)
 
-        self.register_events()
+        # register for events
+        event_dispatcher: EventDispatcher = EventDispatcher.instance()
+        event_dispatcher.register_listener(event_definitions.MODEL_LOAD_REQUESTED, self.load_model)
+        event_dispatcher.register_listener(event_definitions.MODEL_UNLOAD_REQUESTED, self.unload_model)
+        event_dispatcher.register_listener(event_definitions.START_POINT_SET_REQUESTED, self.set_start_point)
+        event_dispatcher.register_listener(event_definitions.END_POINT_SET_REQUESTED, self.set_end_point)
+        event_dispatcher.register_listener(event_definitions.RADIAL_OBSTACLE_SET_REQUESTED, self.set_radial_obstacle)
+        event_dispatcher.register_listener(event_definitions.COSTS_CACHING_REQUESTED, self.cache_costs)
+        event_dispatcher.register_listener(event_definitions.OBSTACLES_CACHING_REQUESTED, self.cache_obstacles)
+        event_dispatcher.register_listener(event_definitions.HEURISTICS_CACHING_REQUESTED, self.cache_heuristics)
+        event_dispatcher.register_listener(event_definitions.PATH_FIND_REQUESTED, self.find_path)
 
         self.path_finder = PathFinder()
         self.agent = Astronaut(80)
@@ -36,11 +43,6 @@ class PathManager:
         self.cost_function = None
         self.start_point = None
         self.end_point = None
-
-    def register_events(self):
-
-        event_dispatcher: EventDispatcher = EventDispatcher.get_instance()
-        event_dispatcher.register_listener(event_definitions.UNLOAD_MODEL, self.unload_model)
 
     '''=======================================
     MODELS
@@ -80,7 +82,7 @@ class PathManager:
         self.cost_function = ExplorerCost(self.agent, self.terrain_model, 'Energy', cached=False)
 
         # dispatch loaded event
-        EventDispatcher.get_instance().trigger_event(event_definitions.TERRAIN_MODEL_LOADED)
+        EventDispatcher.instance().trigger_event(event_definitions.MODEL_LOAD_COMPLETE, self.terrain_model)
 
     def unload_model(self):
 
@@ -95,6 +97,9 @@ class PathManager:
         # clear out cached data in path finder
         self.path_finder.clear_all()
 
+        # dispatch unloaded event
+        EventDispatcher.instance().trigger_event(event_definitions.MODEL_UNLOAD_COMPLETE)
+
     '''=======================================
     ENDPOINTS
     ======================================='''
@@ -104,8 +109,12 @@ class PathManager:
         if not self.terrain_model:
             return
 
+        # set point
         geo_point = GeoPoint(self.terrain_model.ROW_COL, row, column)
         self.start_point = geo_point
+
+        # dispatch event
+        EventDispatcher.instance().trigger_event(event_definitions.START_POINT_SET_COMPLETE, row, column)
 
     def set_end_point(self, row, column):
 
@@ -113,8 +122,15 @@ class PathManager:
         if not self.terrain_model:
             return
 
+        # clear cached heuristics
+        self.path_finder.clear_heuristics()
+
+        # set the point
         geo_point = GeoPoint(self.terrain_model.ROW_COL, row, column)
         self.end_point = geo_point
+
+        # dispatch event
+        EventDispatcher.instance().trigger_event(event_definitions.END_POINT_SET_COMPLETE, row, column)
 
     '''=======================================
     CACHING
@@ -131,7 +147,7 @@ class PathManager:
         self.path_finder.cache_costs(cost_map)
 
         # dispatch caching complete event
-        EventDispatcher.get_instance().trigger_event(event_definitions.COSTS_CACHING_COMPLETE)
+        EventDispatcher.instance().trigger_event(event_definitions.COSTS_CACHING_COMPLETE)
 
     def cache_obstacles(self):
 
@@ -144,9 +160,9 @@ class PathManager:
         self.path_finder.cache_obstacles(obstacle_map)
 
         # dispatch caching complete event
-        EventDispatcher.get_instance().trigger_event(event_definitions.OBSTACLES_CACHING_COMPLETE)
+        EventDispatcher.instance().trigger_event(event_definitions.OBSTACLES_CACHING_COMPLETE)
 
-    def cache_heuristics_threaded(self):
+    def cache_heuristics(self):
 
         # if no terrain model, cost function, or end_point, early out
         if not self.terrain_model or not self.cost_function or not self.end_point:
@@ -158,12 +174,30 @@ class PathManager:
         self.path_finder.cache_heuristics(heuristics_map)
 
         # dispatch caching complete event
-        EventDispatcher.get_instance().trigger_event(event_definitions.HEURISTICS_CACHING_COMPLETE)
+        EventDispatcher.instance().trigger_event(event_definitions.HEURISTICS_CACHING_COMPLETE)
 
     '''=======================================
-    PATHFINDING & MANIPULATION
+    PATH FINDING & MANIPULATION
     ======================================='''
-    def find_path_threaded(self):
+    def set_radial_obstacle(self, row, column, radius, obstacle_state):
+
+        # clear cached obstacles
+        self.path_finder.clear_obstacles()
+
+        # convert to appropriate coordinates
+        geo_point = GeoPoint(self.terrain_model.ROW_COL, row, column)
+        elt = self.terrain_model.getMeshElement(geo_point)
+
+        self.terrain_model.set_circular_obstacle(
+            (elt.x, elt.y),
+            radius * self.terrain_model.resolution,
+            obstacle_state
+        )
+
+        # dispatch obstacle setting complete
+        EventDispatcher.instance().trigger_event(event_definitions.RADIAL_OBSTACLE_SET_COMPLETE)
+
+    def find_path(self):
 
         # if no terrain model, start_point, or end_point, early out
         if not self.terrain_model or not self.start_point or not self.end_point:
@@ -175,17 +209,7 @@ class PathManager:
         # solve!
         source = self.terrain_model.getMeshElement(self.start_point).mesh_coordinate  # unscaled (row, column)
         target = self.terrain_model.getMeshElement(self.end_point).mesh_coordinate  # unscaled (row, column)
-        search_result = self.path_finder.astar_solve(source, target)
+        found_path = self.path_finder.astar_solve(source, target)
 
         # dispatch path found event
-        EventDispatcher.get_instance().trigger_event(event_definitions.PATH_FOUND)
-
-    def set_obstacle_at_location(self, row, column, radius, obstacle_state):
-        geo_point = GeoPoint(self.terrain_model.ROW_COL, row, column)
-        elt = self.terrain_model.getMeshElement(geo_point)
-
-        self.terrain_model.set_circular_obstacle(
-            (elt.x, elt.y),
-            radius * self.terrain_model.resolution,
-            obstacle_state
-        )
+        EventDispatcher.instance().trigger_event(event_definitions.PATH_FIND_COMPLETE, found_path)

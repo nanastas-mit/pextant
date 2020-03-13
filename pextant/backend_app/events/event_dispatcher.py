@@ -9,11 +9,11 @@ class EventDispatcher:
     SINGLETON INTERFACE
     ======================================='''
     @staticmethod
-    def get_instance():
-        if not EventDispatcher.__instance:
+    def instance():
+        if not EventDispatcher._instance:
             EventDispatcher()
-        return EventDispatcher.__instance
-    __instance = None
+        return EventDispatcher._instance
+    _instance = None
 
     '''=======================================
     STARTUP/SHUTDOWN
@@ -21,10 +21,10 @@ class EventDispatcher:
     def __init__(self):
 
         # singleton check/initialization
-        if EventDispatcher.__instance is not None:
+        if EventDispatcher._instance is not None:
             raise Exception("This class is a singleton!")
         else:
-            EventDispatcher.__instance = self
+            EventDispatcher._instance = self
 
         self.delayed_message_queue = queue.Queue()
         self.event_list = {}

@@ -12,12 +12,12 @@ class PageBase(tk.Frame):
 
         # register listeners
         self.event_handlers = event_handlers
-        EventDispatcher.get_instance().set_event_listening_group(self.event_handlers, True)
+        EventDispatcher.instance().set_event_listening_group(self.event_handlers, True)
 
     def page_closed(self):
 
         # unregister listeners
-        EventDispatcher.get_instance().set_event_listening_group(self.event_handlers, False)
+        EventDispatcher.instance().set_event_listening_group(self.event_handlers, False)
 
     def page_update(self, delta_time):
         """called once per frame by ui_controller.

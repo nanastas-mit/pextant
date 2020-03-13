@@ -178,7 +178,7 @@ class ClientEventHandler:
         content = self._json_decode(serialized_content, encoding)
 
         # dispatch event
-        EventDispatcher.get_instance().trigger_event(
+        EventDispatcher.instance().trigger_event(
             event_definitions.MESSAGE_RECEIVED,
             self.socket,
             content)
