@@ -96,7 +96,7 @@ class PageFindPath(PageBase):
         STATE_SETTING_START: "Setting Start...",
         STATE_SETTING_END: "Setting End...",
         STATE_SETTING_OBSTACLE: "Setting Obstacle(s)...",
-        STATE_CACHING_COSTS: "Caching Data...",
+        STATE_CACHING_COSTS: "Caching Costs...",
         STATE_FINDING_PATH: "Finding Path...",
     }
 
@@ -190,7 +190,7 @@ class PageFindPath(PageBase):
         # required features
         self.path_manager = RequiredFeature(
             "path_manager",
-            #has_attributes(["path_finder", "terrain_model", "cost_function", "start_point", "end_point"])
+            #has_attributes(["terrain_model", "cost_function", "start_point", "end_point"])
         ).result
 
         # ui references
@@ -588,19 +588,19 @@ class PageFindPath(PageBase):
         if self.state == PageFindPath.STATE_READY:
 
             # costs
-            if not self.path_manager.path_finder.costs_cached and self.path_manager.cost_function:
+            if not self.path_manager.costs_cached and self.path_manager.cost_function:
                 costs_btn['state'] = tk.NORMAL
             else:
                 costs_btn['state'] = tk.DISABLED
 
             # obstacles
-            if not self.path_manager.path_finder.obstacles_cached and self.path_manager.terrain_model:
+            if not self.path_manager.obstacles_cached and self.path_manager.terrain_model:
                 obstacles_btn['state'] = tk.NORMAL
             else:
                 obstacles_btn['state'] = tk.DISABLED
 
             # heuristics
-            if not self.path_manager.path_finder.heuristics_cached and self.path_manager.end_point:
+            if not self.path_manager.heuristics_cached and self.path_manager.end_point:
                 heuristics_btn['state'] = tk.NORMAL
             else:
                 heuristics_btn['state'] = tk.DISABLED
@@ -765,7 +765,7 @@ class PageFindPath(PageBase):
         if self.state == PageFindPath.STATE_READY:
 
             # enable / disable buttons based on existence of parameters
-            if self.path_manager.path_finder.all_cached and self.path_manager.terrain_model and \
+            if self.path_manager.all_data_cached and self.path_manager.terrain_model and \
                     self.path_manager.start_point and self.path_manager.end_point:
                 btn['state'] = tk.NORMAL
             else:

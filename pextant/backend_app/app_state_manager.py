@@ -54,8 +54,8 @@ class AppStateManager:
         }
         EventDispatcher.instance().set_event_listening_group(self.event_handlers, True)
 
-        # create the path manager
-        self.path_manager = PathManager(self)
+        # create the path manager (threaded if gui will be used)
+        self.path_manager = PathManager(self, threaded=create_gui)
         FeatureBroker.instance().provide("path_manager", self.path_manager)
 
         # create the connection server

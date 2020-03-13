@@ -8,6 +8,7 @@ from pextant.explorers import Astronaut
 from pextant.lib.geoshapely import GeoPoint
 from pextant.solvers.astarMesh import ExplorerCost
 from pextant_cpp import PathFinder
+from threading import Thread
 
 
 class PathManager(AppComponent):
@@ -16,33 +17,73 @@ class PathManager(AppComponent):
     '''=======================================
     FIELDS
     ======================================='''
+    # consts
     MODELS_DIRECTORY = "models"
+
+    # properties
+    @property
+    def costs_cached(self):
+        return self.path_finder.costs_cached
+
+    @property
+    def obstacles_cached(self):
+        return self.path_finder.obstacles_cached
+
+    @property
+    def heuristics_cached(self):
+        return self.path_finder.heuristics_cached
+
+    @property
+    def all_data_cached(self):
+        return self.path_finder.all_cached
 
     '''=======================================
     STARTUP/SHUTDOWN
     ======================================='''
-    def __init__(self, manager):
+    def __init__(self, manager, threaded):
 
         super().__init__(manager)
 
+        # threading references
+        self.threaded = threaded
+        self._threads = {}
+
         # register for events
         event_dispatcher: EventDispatcher = EventDispatcher.instance()
-        event_dispatcher.register_listener(event_definitions.MODEL_LOAD_REQUESTED, self.load_model)
+        event_dispatcher.register_listener(
+            event_definitions.MODEL_LOAD_REQUESTED,
+            self.create_threaded_switch(self.load_model)
+        )
         event_dispatcher.register_listener(event_definitions.MODEL_UNLOAD_REQUESTED, self.unload_model)
         event_dispatcher.register_listener(event_definitions.START_POINT_SET_REQUESTED, self.set_start_point)
         event_dispatcher.register_listener(event_definitions.END_POINT_SET_REQUESTED, self.set_end_point)
         event_dispatcher.register_listener(event_definitions.RADIAL_OBSTACLE_SET_REQUESTED, self.set_radial_obstacle)
-        event_dispatcher.register_listener(event_definitions.COSTS_CACHING_REQUESTED, self.cache_costs)
+        event_dispatcher.register_listener(
+            event_definitions.COSTS_CACHING_REQUESTED,
+            self.create_threaded_switch(self.cache_costs)
+        )
         event_dispatcher.register_listener(event_definitions.OBSTACLES_CACHING_REQUESTED, self.cache_obstacles)
         event_dispatcher.register_listener(event_definitions.HEURISTICS_CACHING_REQUESTED, self.cache_heuristics)
-        event_dispatcher.register_listener(event_definitions.PATH_FIND_REQUESTED, self.find_path)
+        event_dispatcher.register_listener(
+            event_definitions.PATH_FIND_REQUESTED,
+            self.create_threaded_switch(self.find_path)
+        )
 
+        # path variables
         self.path_finder = PathFinder()
         self.agent = Astronaut(80)
         self.terrain_model = None
         self.cost_function = None
         self.start_point = None
         self.end_point = None
+
+    def close(self):
+
+        super().close()
+
+        # wait for existing threads to complete
+        for _, thread in self._threads.items():
+            thread.join()
 
     '''=======================================
     MODELS
@@ -58,9 +99,6 @@ class PathManager(AppComponent):
         return model_files
 
     def load_model(self, model_name, max_slope):
-
-        # clear out any existing stuff
-        self.unload_model()
 
         # get the name of the file of the model to load
         local_path_file_name = path.join(PathManager.MODELS_DIRECTORY, model_name)
@@ -199,8 +237,8 @@ class PathManager(AppComponent):
 
     def find_path(self):
 
-        # if no terrain model, start_point, or end_point, early out
-        if not self.terrain_model or not self.start_point or not self.end_point:
+        # if no terrain model, start_point, end_point, or cache, early out
+        if not self.terrain_model or not self.start_point or not self.end_point or not self.all_data_cached:
             return
 
         # reset any prior progress
@@ -213,3 +251,25 @@ class PathManager(AppComponent):
 
         # dispatch path found event
         EventDispatcher.instance().trigger_event(event_definitions.PATH_FIND_COMPLETE, found_path)
+
+    '''=======================================
+    HELPERS
+    ======================================='''
+    def create_threaded_switch(self, func):
+
+        # start new thread if specified
+        if self.threaded:
+
+            def threaded_func(*args):
+                thread_name = func.__name__
+                thread = Thread(name=thread_name, target=func, args=args)
+                self._threads[thread_name] = thread
+                thread.start()
+            return threaded_func
+
+        # otherwise, just call the function
+        else:
+
+            def unthreaded_func(*args):
+                func(*args)
+            return unthreaded_func

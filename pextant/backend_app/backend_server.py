@@ -39,6 +39,9 @@ class PextantServer(AppComponent):
         self.connected_client_handlers = {}
 
     def close(self):
+
+        super().close()
+
         self.stop_listening()
         self.selector.close()
 
