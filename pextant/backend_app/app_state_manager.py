@@ -1,8 +1,9 @@
 import pextant.backend_app.events.event_definitions as event_definitions
 import time
-from pextant.backend_app.events.event_dispatcher import EventDispatcher
-from pextant.backend_app.backend_server import PextantServer
+from pextant.backend_app.client_server.server import Server
 from pextant.backend_app.dependency_injection import FeatureBroker
+from pextant.backend_app.events.event_dispatcher import EventDispatcher
+from pextant.backend_app.client_server.client_message_processor import ClientMessageProcessor
 from pextant.backend_app.path_manager import PathManager
 from pextant.backend_app.ui.ui_controller import UIController
 
@@ -30,8 +31,6 @@ class AppStateManager:
     ======================================='''
     def __init__(self, create_gui=False):
 
-        self.nick_client = None  # TODO: make me better
-
         # set current state
         self.current_state = AppStateManager.INITIALIZING
 
@@ -47,21 +46,20 @@ class AppStateManager:
         self.event_handlers = {
             event_definitions.START_SERVER: self.start_connection_accept_server,
             event_definitions.STOP_SERVER: self.stop_connection_accept_server,
-            event_definitions.CLIENT_CONNECTED: self.on_client_connected,
-            event_definitions.SEND_MESSAGE: self.on_send_message,
-            event_definitions.MESSAGE_RECEIVED: self.on_message_received,
             event_definitions.UI_WINDOW_CLOSED: self.exit,
         }
         EventDispatcher.instance().set_event_listening_group(self.event_handlers, True)
 
-        # create the path manager (threaded if gui will be used)
+        # COMPONENTS
+        # path manager (threaded if gui will be used)
         self.path_manager = PathManager(self, threaded=create_gui)
         FeatureBroker.instance().provide("path_manager", self.path_manager)
-
-        # create the connection server
-        self.server = PextantServer(HOST_NAME, HOST_PORT, self)
-
-        # if specified, create gui
+        # server
+        self.server = Server(HOST_NAME, HOST_PORT, self)
+        FeatureBroker.instance().provide("server", self.server)
+        # message manager
+        self.message_manager = ClientMessageProcessor(self)
+        # gui
         if create_gui:
             self.gui = UIController(self)
         else:
@@ -125,18 +123,6 @@ class AppStateManager:
 
     def stop_connection_accept_server(self):
         self.server.stop_listening()
-
-    def on_client_connected(self, client_socket, address):
-        self.nick_client = client_socket
-        print("client connected", client_socket, address)
-
-    @staticmethod
-    def on_message_received(socket, data):
-        print("message received ", socket, data)
-
-    def on_send_message(self, msg_type, msg_content):
-        print(f"sending message {msg_type}, {msg_content}")
-        self.server.send_message_to_client(self.nick_client, msg_type, msg_content)
 
     '''=======================================
     COMPONENT MANAGEMENT

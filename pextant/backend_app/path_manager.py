@@ -194,7 +194,7 @@ class PathManager(AppComponent):
             return
 
         # list-ify the obstacles and store in pathfinder
-        obstacle_map = self.terrain_model.obstacle_mask().tolist()
+        obstacle_map = self.terrain_model.obstacles.astype(int).tolist()
         self.path_finder.cache_obstacles(obstacle_map)
 
         # dispatch caching complete event
@@ -217,7 +217,7 @@ class PathManager(AppComponent):
     '''=======================================
     PATH FINDING & MANIPULATION
     ======================================='''
-    def set_radial_obstacle(self, row, column, radius, obstacle_state):
+    def set_radial_obstacle(self, row, column, radius, state):
 
         # clear cached obstacles
         self.path_finder.clear_obstacles()
@@ -229,11 +229,14 @@ class PathManager(AppComponent):
         self.terrain_model.set_circular_obstacle(
             (elt.x, elt.y),
             radius * self.terrain_model.resolution,
-            obstacle_state
+            state
         )
 
         # dispatch obstacle setting complete
-        EventDispatcher.instance().trigger_event(event_definitions.RADIAL_OBSTACLE_SET_COMPLETE)
+        EventDispatcher.instance().trigger_event(
+            event_definitions.RADIAL_OBSTACLE_SET_COMPLETE,
+            self.terrain_model.obstacles
+        )
 
     def find_path(self):
 

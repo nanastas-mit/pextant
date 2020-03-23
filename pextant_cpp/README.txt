@@ -25,7 +25,7 @@ Using Visual Studio 2019+
 	-open command prompt
 	-navigate to folder containing the pextant_cpp folder/project
 	-type 'pip install ./pextant_cpp'
-		-for this to work, you will need to have CMake installed in your Python environment
+		-for this to work, you will need to have the CMake python package installed in your Python environment
 	-this is where the module's version number lives, so if you change something you should update this
 	
 -All done!

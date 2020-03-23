@@ -1,7 +1,7 @@
 import pextant.backend_app.events.event_definitions as event_definitions
+import pextant.backend_app.client_server.message_definitions as message_definitions
 import pextant.backend_app.ui.fonts as fonts
 import tkinter as tk
-from pextant.backend_app import messages
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.backend_app.ui.page_base import PageBase
 from itertools import count
@@ -75,10 +75,10 @@ class PageServer(PageBase):
         value_tx = tk.Entry(self, width=20, justify=tk.LEFT)
         value_tx.grid(column=2, row=send_button_row, sticky=tk.W)
         def send_message():
-            msg_type = messages.MESSAGE_TYPE_SIMPLE
+            msg_type = message_definitions.SIMPLE
             msg_content = {"action": action_tx.get(), "value": value_tx.get()}
             EventDispatcher.instance().trigger_event(
-                event_definitions.SEND_MESSAGE,
+                event_definitions.SEND_MESSAGE_REQUESTED,
                 msg_type,
                 msg_content
             )
@@ -110,7 +110,5 @@ class PageServer(PageBase):
     def on_server_stopped(self):
         pass
 
-    def on_message_received(self, socket, data):
-
-        self.received_action_lbl["text"] = data["action"]
-        self.received_value_lbl["text"] = data["value"]
+    def on_message_received(self, socket, msg_type, data):
+        pass

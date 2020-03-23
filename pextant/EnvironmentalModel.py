@@ -1,7 +1,6 @@
 import re
 from PIL import Image
 from PIL.PngImagePlugin import PngImageFile
-
 import numpy.ma as ma
 from osgeo import gdal, osr
 
@@ -333,12 +332,18 @@ def load_obstacle_map(filename):
     grid_mesh = GridMesh(gp, dataset)
     model = grid_mesh.loadSubSection(maxSlope=90, cached=True)
 
+    # convert to 0/1 values
+    if len(pixel_values) > 0 and isinstance(pixel_values[0], tuple):
+        zero_value = (0, 0, 0)  # want RGB = 000, don't care about alpha
+        pixel_values = [0 if value[0:3] == zero_value else 1 for value in pixel_values]
+
     # add the obstacles to the model
     obstacle_map = np.array(np.logical_not(pixel_values))  # 'black' (i.e. '0') values are obstacles, want to only those
     obstacle_map = obstacle_map.reshape(img.height, img.width)
     model.set_array_obstacle(obstacle_map)
 
     return model
+
 
 if __name__ == '__main__':
     from pextant.lib.utils import gridpoints_list

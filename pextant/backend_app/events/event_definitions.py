@@ -1,10 +1,16 @@
+'''=======================================
+CLIENT/SERVER
+======================================='''
 START_SERVER = "START_SERVER"
 STOP_SERVER = "STOP_SERVER"
 CLIENT_CONNECTED = "CLIENT_CONNECTED"
 
 MESSAGE_RECEIVED = "MESSAGE_RECEIVED"
-SEND_MESSAGE = "SEND_MESSAGE"
+SEND_MESSAGE_REQUESTED = "SEND_MESSAGE_REQUESTED"
 
+'''=======================================
+UI
+======================================='''
 UI_WINDOW_CLOSED = "UI_WINDOW_CLOSED"
 
 '''=======================================

@@ -7,8 +7,6 @@ from pextant.backend_app.ui.page_server import PageServer
 from pextant.backend_app.ui.page_find_path import PageFindPath
 from pextant.backend_app.ui.widget_styles import UIStyleManager
 
-from pextant.backend_app.ui.page_animation_test import PageAnimationTest
-
 
 class UIController(AppComponent):
     """main class for controlling UI window"""
@@ -34,7 +32,6 @@ class UIController(AppComponent):
         self.pages = [
             self.create_page(PageFindPath, "Path"),
             self.create_page(PageServer, "Server"),
-            self.create_page(PageAnimationTest, "Anim"),
         ]
         self.tab_control.pack(fill=tk.BOTH, expand=1)
 

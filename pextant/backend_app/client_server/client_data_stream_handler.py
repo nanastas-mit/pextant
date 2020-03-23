@@ -12,8 +12,8 @@ class SocketClosedException(Exception):
     pass
 
 
-class ClientEventHandler:
-    """class for handling events as received from selector"""
+class ClientDataStreamHandler:
+    """class for handling reading and writing to client socket"""
 
     '''=======================================
     CLASS FIELDS
@@ -136,7 +136,7 @@ class ClientEventHandler:
     def _process_protoheader(self):
 
         # if we have at least the size of the protoheader in our buffer...
-        header_length = ClientEventHandler.PROTO_HEADER_LENGTH
+        header_length = ClientDataStreamHandler.PROTO_HEADER_LENGTH
         if len(self._recv_buffer) >= header_length:
 
             # process it and remove relevant data from buffer front
@@ -158,29 +158,30 @@ class ClientEventHandler:
             self._recv_buffer = self._recv_buffer[header_length:]
 
             # check to make sure header has everything required
-            for required_field in ClientEventHandler.HEADER_REQUIRED_FIELDS:
+            for required_field in ClientDataStreamHandler.HEADER_REQUIRED_FIELDS:
                 if required_field not in self.jsonheader:
                     raise ValueError(f'Missing required header "{required_field}".')
 
     def _process_message_body(self):
 
         # if we haven't read in entire content yet, hold off
-        content_length = self.jsonheader[ClientEventHandler.CONTENT_LENGTH_KEY]
+        content_length = self.jsonheader[ClientDataStreamHandler.CONTENT_LENGTH_KEY]
         if not len(self._recv_buffer) >= content_length:
             return
 
-        # pull ofF relevant bytes from received buffer
+        # pull off relevant bytes from received buffer
         serialized_content = self._recv_buffer[:content_length]
         self._recv_buffer = self._recv_buffer[content_length:]
 
         # convert from json
-        encoding = self.jsonheader[ClientEventHandler.CONTENT_ENCODING_KEY]
+        encoding = self.jsonheader[ClientDataStreamHandler.CONTENT_ENCODING_KEY]
         content = self._json_decode(serialized_content, encoding)
 
         # dispatch event
         EventDispatcher.instance().trigger_event(
             event_definitions.MESSAGE_RECEIVED,
             self.socket,
+            self.jsonheader[ClientDataStreamHandler.MESSAGE_TYPE_KEY],
             content)
 
         # reset everything back to original state
@@ -218,22 +219,6 @@ class ClientEventHandler:
 
             # reset
             self._reset_after_write()
-            '''
-            print("sending", repr(self._send_buffer), "to", self.address)
-
-            try:
-                # send as much as we're able
-                sent = self.socket.send(self._send_buffer)
-            except BlockingIOError:  # Resource temporarily unavailable (errno EWOULDBLOCK)
-                pass
-            else:
-                # remove sent bytes from beginning of buffer
-                self._send_buffer = self._send_buffer[sent:]
-
-                # Close when the buffer is drained. The response has been sent.
-                if sent and not self._send_buffer:
-                    self.close()
-            '''
 
     def enqueue_message(self, msg_type, msg_content):
 
@@ -252,10 +237,10 @@ class ClientEventHandler:
 
         # create header as a python dictionary
         json_header = {
-            ClientEventHandler.MESSAGE_TYPE_KEY: message_type,
-            ClientEventHandler.CONTENT_ENCODING_KEY: content_encoding,
-            ClientEventHandler.BYTE_ORDER_KEY: sys.byteorder,
-            ClientEventHandler.CONTENT_LENGTH_KEY: len(content_bytes),
+            ClientDataStreamHandler.MESSAGE_TYPE_KEY: message_type,
+            ClientDataStreamHandler.CONTENT_ENCODING_KEY: content_encoding,
+            ClientDataStreamHandler.BYTE_ORDER_KEY: sys.byteorder,
+            ClientDataStreamHandler.CONTENT_LENGTH_KEY: len(content_bytes),
         }
 
         # convert dictionary header to json byte string

@@ -5,17 +5,17 @@ import struct
 import sys
 import tkinter as tk
 import threading
+import pextant.backend_app.client_server.message_definitions as message_definitions
 from itertools import count
-from pextant.backend_app.client_event_handler import ClientEventHandler
-import pextant.backend_app.messages as messages
+from pextant.backend_app.client_server.client_data_stream_handler import ClientDataStreamHandler
 
 HOST_NAME = 'localhost'
 HOST_PORT = 3000
 
-MESSAGE_TYPE_KEY = ClientEventHandler.MESSAGE_TYPE_KEY
-CONTENT_ENCODING_KEY = ClientEventHandler.CONTENT_ENCODING_KEY
-BYTE_ORDER_KEY = ClientEventHandler.BYTE_ORDER_KEY
-CONTENT_LENGTH_KEY = ClientEventHandler.CONTENT_LENGTH_KEY
+MESSAGE_TYPE_KEY = ClientDataStreamHandler.MESSAGE_TYPE_KEY
+CONTENT_ENCODING_KEY = ClientDataStreamHandler.CONTENT_ENCODING_KEY
+BYTE_ORDER_KEY = ClientDataStreamHandler.BYTE_ORDER_KEY
+CONTENT_LENGTH_KEY = ClientDataStreamHandler.CONTENT_LENGTH_KEY
 
 def _json_encode(obj, encoding):
     return json.dumps(obj, ensure_ascii=False).encode(encoding)
@@ -32,7 +32,7 @@ def create_message(action, value):
 
     print("create_request", action, value)
 
-    message_type = messages.MESSAGE_TYPE_SIMPLE
+    message_type = message_definitions.SIMPLE
     content_encoding = "utf-8"
     content = {"action": action, "value": value}
     content_bytes = _json_encode(content, content_encoding)

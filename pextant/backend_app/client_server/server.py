@@ -4,10 +4,10 @@ import selectors
 import traceback
 from pextant.backend_app.app_component import AppComponent
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
-from pextant.backend_app.client_event_handler import ClientEventHandler, SocketClosedException
+from pextant.backend_app.client_server.client_data_stream_handler import ClientDataStreamHandler, SocketClosedException
 
 
-class PextantServer(AppComponent):
+class Server(AppComponent):
     """A simple server used for accepting client connections and handling subsequent communication"""
 
     '''=======================================
@@ -59,7 +59,7 @@ class PextantServer(AppComponent):
             print("listening for clients at {0}:{1}".format(self.server_address[0], self.server_address[1]))
 
             # register with selector (read only - only job is to accept connections)
-            self.selector.register(self.server_socket, selectors.EVENT_READ, data=PextantServer.CONNECTION_ACCEPT_SERVER_DATA)
+            self.selector.register(self.server_socket, selectors.EVENT_READ, data=Server.CONNECTION_ACCEPT_SERVER_DATA)
 
     def stop_listening(self):
 
@@ -92,7 +92,7 @@ class PextantServer(AppComponent):
         for key, mask in events:
 
             # check to see if socket is our connection server
-            if key.data == PextantServer.CONNECTION_ACCEPT_SERVER_DATA:
+            if key.data == Server.CONNECTION_ACCEPT_SERVER_DATA:
 
                 # all this thing does is accept connections
                 self._accept_pending_connection()
@@ -131,13 +131,21 @@ class PextantServer(AppComponent):
             client_event_handler = self.connected_client_handlers[client_socket]
             client_event_handler.enqueue_message(msg_type, msg_content)
 
+    def send_message_to_all_clients(self, msg_type, msg_content):
+
+        # for each connected client
+        for client_socket in self.connected_client_handlers.keys():
+
+            # send the message
+            self.send_message_to_client(client_socket, msg_type, msg_content)
+
     def _accept_pending_connection(self):
 
         # accept connection
         client_socket, address = self.server_socket.accept()
 
         # register with our selector
-        client_event_handler = ClientEventHandler(self.selector, client_socket, address)
+        client_event_handler = ClientDataStreamHandler(self.selector, client_socket, address)
         events = selectors.EVENT_READ  # | selectors.EVENT_WRITE
         self.selector.register(client_socket, events)
 

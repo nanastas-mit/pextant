@@ -1,7 +1,7 @@
 ================================
 Installation Instructions
 ================================
-pextant is developed in Python 2.7 (32 bit and 64 bit should both work). Future releases might include packaging and automatic installation through a ``setup.py`` file. In the meantime, installation is facilitated through a combination of the conda enviroment manager and the pip tool. 
+pextant is developed in Python 3.7 (32 bit and 64 bit should both work). Future releases might include packaging and automatic installation through a ``setup.py`` file. In the meantime, installation is facilitated through a combination of the conda enviroment manager and the pip tool. 
 **Only tested on Windows machines**
 
 Quick instructions:

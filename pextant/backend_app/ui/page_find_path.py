@@ -190,7 +190,10 @@ class PageFindPath(PageBase):
         # required features
         self.path_manager = RequiredFeature(
             "path_manager",
-            #has_attributes(["terrain_model", "cost_function", "start_point", "end_point"])
+            has_attributes(
+                "terrain_model", "cost_function", "start_point", "end_point",
+                "costs_cached", "obstacles_cached", "heuristics_cached", "heuristics_cached"
+            )
         ).result
 
         # ui references
@@ -357,9 +360,6 @@ class PageFindPath(PageBase):
     ======================================='''
     def on_model_loaded(self, terrain_model):
 
-        # should be coming from loading the model
-        assert self.state == PageFindPath.STATE_LOADING_MODEL
-
         # create the terrain image
         weight = 1.0
         res = terrain_model.resolution
@@ -415,7 +415,7 @@ class PageFindPath(PageBase):
         # head back to ready state
         self.state = PageFindPath.STATE_READY
 
-    def on_obstacles_changed(self):
+    def on_obstacles_changed(self, obstacles):
 
         # update obstacle image
         self.obstacle_img.set_data(self.path_manager.terrain_model.obstacle_mask())
@@ -428,16 +428,10 @@ class PageFindPath(PageBase):
 
     def on_costs_caching_complete(self):
 
-        # should be coming from caching
-        assert self.state == PageFindPath.STATE_CACHING_COSTS
-
         # ready for the next thing
         self.state = PageFindPath.STATE_READY
 
     def on_path_found(self, path):
-
-        # should be coming from finding path
-        assert self.state == PageFindPath.STATE_FINDING_PATH
 
         # update line data
         xs = [node[1] for node in path]
