@@ -14,4 +14,5 @@ pextant/solvers/*
 pextant/lib/*
 *.xlsx
 pextant_cpp/out/*
+pextant_cpp/CMakeSettings.json
 pextant/nick_test/*
