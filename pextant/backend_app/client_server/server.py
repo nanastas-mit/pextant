@@ -51,7 +51,7 @@ class Server(AppComponent):
         if self.server_socket is None:
 
             # create the server socket
-            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.server_socket.bind(self.server_address)
             self.server_socket.listen()

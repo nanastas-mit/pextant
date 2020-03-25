@@ -121,7 +121,7 @@ def main():
 
     # connect
     print('try connect')
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     client.connect((HOST_NAME, HOST_PORT))
     print('connected')
 
