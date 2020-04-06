@@ -98,10 +98,10 @@ class PathManager(AppComponent):
 
         return model_files
 
-    def load_model(self, model_name, max_slope):
+    def load_model(self, model_to_load, max_slope):
 
         # get the name of the file of the model to load
-        local_path_file_name = path.join(PathManager.MODELS_DIRECTORY, model_name)
+        local_path_file_name = path.join(PathManager.MODELS_DIRECTORY, model_to_load)
         _, extension = path.splitext(local_path_file_name)
 
         # load the model
@@ -110,9 +110,12 @@ class PathManager(AppComponent):
             self.terrain_model = grid_mesh.loadSubSection(maxSlope=max_slope, cached=False)
         elif extension == '.png':  # .png is obstacle 'maze'
             self.terrain_model = load_obstacle_map(local_path_file_name)
-        else:  # otherwise, a DEM
+        elif extension == '.img' or extension == '.tif':  # .img and .tif are DEMs
             grid_mesh = GDALMesh(local_path_file_name)
             self.terrain_model = grid_mesh.loadSubSection(maxSlope=max_slope, cached=False)
+        else:
+            print(f"File type {extension} not valid for model loading!")
+            return
 
         # load the kernel, cost function
         kernel_list = self.terrain_model.searchKernel.getKernel().tolist()
@@ -263,9 +266,9 @@ class PathManager(AppComponent):
         # start new thread if specified
         if self.threaded:
 
-            def threaded_func(*args):
+            def threaded_func(*args, **kwargs):
                 thread_name = func.__name__
-                thread = Thread(name=thread_name, target=func, args=args)
+                thread = Thread(name=thread_name, target=func, args=args, kwargs=kwargs)
                 self._threads[thread_name] = thread
                 thread.start()
             return threaded_func
@@ -273,6 +276,6 @@ class PathManager(AppComponent):
         # otherwise, just call the function
         else:
 
-            def unthreaded_func(*args):
-                func(*args)
+            def unthreaded_func(*args, **kwargs):
+                func(*args, **kwargs)
             return unthreaded_func

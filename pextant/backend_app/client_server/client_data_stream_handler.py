@@ -1,6 +1,7 @@
 import io
 import json
 import pextant.backend_app.events.event_definitions as event_definitions
+import pextant.backend_app.client_server.message_definitions as message_definitions
 import sys
 import selectors
 import struct
@@ -14,22 +15,6 @@ class SocketClosedException(Exception):
 
 class ClientDataStreamHandler:
     """class for handling reading and writing to client socket"""
-
-    '''=======================================
-    CLASS FIELDS
-    ======================================='''
-    PROTO_HEADER_LENGTH = 4  # size of unsigned long
-
-    MESSAGE_TYPE_KEY = "message_type"
-    CONTENT_ENCODING_KEY = "content_encoding"
-    BYTE_ORDER_KEY = "byteorder"
-    CONTENT_LENGTH_KEY = "content_length"
-    HEADER_REQUIRED_FIELDS = (
-        MESSAGE_TYPE_KEY,
-        CONTENT_ENCODING_KEY,
-        BYTE_ORDER_KEY,
-        CONTENT_LENGTH_KEY,
-    )
 
     '''=======================================
     STARTUP/SHUTDOWN
@@ -136,7 +121,7 @@ class ClientDataStreamHandler:
     def _process_protoheader(self):
 
         # if we have at least the size of the protoheader in our buffer...
-        header_length = ClientDataStreamHandler.PROTO_HEADER_LENGTH
+        header_length = message_definitions.PROTO_HEADER_LENGTH
         if len(self._recv_buffer) >= header_length:
 
             # process it and remove relevant data from buffer front
@@ -158,14 +143,14 @@ class ClientDataStreamHandler:
             self._recv_buffer = self._recv_buffer[header_length:]
 
             # check to make sure header has everything required
-            for required_field in ClientDataStreamHandler.HEADER_REQUIRED_FIELDS:
+            for required_field in message_definitions.HEADER_REQUIRED_FIELDS:
                 if required_field not in self.jsonheader:
                     raise ValueError(f'Missing required header "{required_field}".')
 
     def _process_message_body(self):
 
         # if we haven't read in entire content yet, hold off
-        content_length = self.jsonheader[ClientDataStreamHandler.CONTENT_LENGTH_KEY]
+        content_length = self.jsonheader[message_definitions.CONTENT_LENGTH_KEY]
         if not len(self._recv_buffer) >= content_length:
             return
 
@@ -174,15 +159,21 @@ class ClientDataStreamHandler:
         self._recv_buffer = self._recv_buffer[content_length:]
 
         # convert from json
-        encoding = self.jsonheader[ClientDataStreamHandler.CONTENT_ENCODING_KEY]
+        encoding = self.jsonheader[message_definitions.CONTENT_ENCODING_KEY]
         content = self._json_decode(serialized_content, encoding)
+
+        # transform into message class
+        msg = message_definitions.create_message_from_id(
+            self.jsonheader[message_definitions.MESSAGE_IDENTIFIER_KEY],
+            **content
+        )
 
         # dispatch event
         EventDispatcher.instance().trigger_event(
             event_definitions.MESSAGE_RECEIVED,
             self.socket,
-            self.jsonheader[ClientDataStreamHandler.MESSAGE_TYPE_KEY],
-            content)
+            msg
+        )
 
         # reset everything back to original state
         self._reset_after_read()
@@ -220,27 +211,27 @@ class ClientDataStreamHandler:
             # reset
             self._reset_after_write()
 
-    def enqueue_message(self, msg_type, msg_content):
+    def enqueue_message(self, msg: message_definitions.BaseMessage):
 
         # set writeable
         self._set_selector_events_mask("rw")
 
         # create message
         content_encoding = "utf-8"
-        content_bytes = self._json_encode(msg_content, "utf-8")
+        content_bytes = self._json_encode(msg.content, "utf-8")
 
         # serialize the message
-        serialized_message = self._serialize_message(msg_type, content_encoding, content_bytes)
+        serialized_message = self._serialize_message(msg.identifier(), content_encoding, content_bytes)
         self._send_buffer += serialized_message
 
-    def _serialize_message(self, message_type, content_encoding, content_bytes):
+    def _serialize_message(self, message_identifier, content_encoding, content_bytes):
 
         # create header as a python dictionary
         json_header = {
-            ClientDataStreamHandler.MESSAGE_TYPE_KEY: message_type,
-            ClientDataStreamHandler.CONTENT_ENCODING_KEY: content_encoding,
-            ClientDataStreamHandler.BYTE_ORDER_KEY: sys.byteorder,
-            ClientDataStreamHandler.CONTENT_LENGTH_KEY: len(content_bytes),
+            message_definitions.MESSAGE_IDENTIFIER_KEY: message_identifier,
+            message_definitions.CONTENT_ENCODING_KEY: content_encoding,
+            message_definitions.BYTE_ORDER_KEY: sys.byteorder,
+            message_definitions.CONTENT_LENGTH_KEY: len(content_bytes),
         }
 
         # convert dictionary header to json byte string

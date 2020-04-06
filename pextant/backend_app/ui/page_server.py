@@ -29,9 +29,6 @@ class PageServer(PageBase):
 
     def initial_setup(self):
 
-        # widgets: https://likegeeks.com/python-gui-examples-tkinter-tutorial/
-        # events/bindings: https://effbot.org/tkinterbook/tkinter-events-and-bindings.htm
-
         '''
         def key_r(event):
             print("released {0}", repr(event.char))
@@ -75,12 +72,10 @@ class PageServer(PageBase):
         value_tx = tk.Entry(self, width=20, justify=tk.LEFT)
         value_tx.grid(column=2, row=send_button_row, sticky=tk.W)
         def send_message():
-            msg_type = message_definitions.SIMPLE
-            msg_content = {"action": action_tx.get(), "value": value_tx.get()}
+            msg = message_definitions.SimpleMessage(action_tx.get(), value_tx.get())
             EventDispatcher.instance().trigger_event(
                 event_definitions.SEND_MESSAGE_REQUESTED,
-                msg_type,
-                msg_content
+                msg
             )
         send_message_btn = tk.Button(self, text="Send Message", command=send_message, justify=tk.LEFT)
         send_message_btn.grid(column=0, row=send_button_row, sticky=tk.W)
@@ -110,5 +105,5 @@ class PageServer(PageBase):
     def on_server_stopped(self):
         pass
 
-    def on_message_received(self, socket, msg_type, data):
+    def on_message_received(self, socket, msg):
         pass

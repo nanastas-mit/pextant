@@ -38,82 +38,75 @@ class ClientMessageProcessor(AppComponent):
     '''=======================================
     MESSAGE PROCESSING
     ======================================='''
-    def send_message(self, msg_type, msg_content):
+    def send_message(self, msg):
 
-        print(f"sending message {msg_type}, {msg_content}")
+        print(f"sending '{type(msg).__name__}' message (id={msg.identifier()})")
 
         # send
-        self.server.send_message_to_all_clients(
-            msg_type,
-            msg_content
-        )
+        self.server.send_message_to_all_clients(msg)
 
-    def on_message_received(self, socket, msg_type, data):
+    def on_message_received(self, socket, msg):
 
-        print("message received ", socket, msg_type, data)
+        print(f"message received from {socket}:\n"
+              f"  ID: {msg.identifier()} ({msg.__class__.__name__})\n"
+              f"  content: {msg.content}")
 
-        # available models
-        if msg_type == message_definitions.AVAILABLE_MODELS_REQUEST:
+        # send available models response immediately
+        if msg.identifier() == message_definitions.AvailableModelRequest.identifier():
             self.send_available_models_message()
 
-        # load model
-        elif msg_type == message_definitions.MODEL_LOAD_REQUEST:
-            EventDispatcher.instance().trigger_event(
-                event_definitions.MODEL_LOAD_REQUESTED,
-                data["model_to_load"],
-                data["max_slope"]
-            )
+        # otherwise, transform into relevant event
+        else:
 
-        # start set
-        elif msg_type == message_definitions.START_POINT_SET_REQUEST:
-            EventDispatcher.instance().trigger_event(
-                event_definitions.START_POINT_SET_REQUESTED,
-                data["row"],
-                data["column"]
-            )
+            # model load request
+            if msg.identifier() == message_definitions.ModelLoadRequest.identifier():
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.MODEL_LOAD_REQUESTED,
+                    msg.model_to_load,
+                    msg.max_slope
+                )
+            # start point set request
+            elif msg.identifier() == message_definitions.StartPointSetRequest.identifier():
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.START_POINT_SET_REQUESTED,
+                    msg.row,
+                    msg.column
+                )
+            # end point set request
+            elif msg.identifier() == message_definitions.EndPointSetRequest.identifier():
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.END_POINT_SET_REQUESTED,
+                    msg.row,
+                    msg.column
+                )
+            # radial obstacle set request
+            elif msg.identifier() == message_definitions.RadialObstacleSetRequest.identifier():
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.RADIAL_OBSTACLE_SET_REQUESTED,
+                    msg.row,
+                    msg.column,
+                    msg.radius,
+                    msg.state
+                )
+            # path find request
+            elif msg.identifier() == message_definitions.PathFindRequest.identifier():
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.PATH_FIND_REQUESTED
+                )
 
-        # end set
-        elif msg_type == message_definitions.END_POINT_SET_REQUEST:
-            EventDispatcher.instance().trigger_event(
-                event_definitions.END_POINT_SET_REQUESTED,
-                data["row"],
-                data["column"]
-            )
-
-        # obstacle set
-        elif msg_type == message_definitions.RADIAL_OBSTACLE_SET_REQUEST:
-            EventDispatcher.instance().trigger_event(
-                event_definitions.RADIAL_OBSTACLE_SET_REQUESTED,
-                data["row"],
-                data["column"],
-                data["radius"],
-                data["state"]
-            )
-
-        # find path
-        elif msg_type == message_definitions.PATH_FIND_REQUEST:
-            EventDispatcher.instance().trigger_event(
-                event_definitions.PATH_FIND_REQUESTED
-            )
-
-    def on_send_message_requested(self, msg_type, msg_content):
+    def on_send_message_requested(self, msg):
 
         # send it!
-        self.send_message(msg_type, msg_content)
+        self.send_message(msg)
 
     def send_available_models_message(self):
 
         # create message content
         available_models = PathManager.get_available_models()
-        msg_content = {
-            'available_models': available_models
-        }
+        msg = message_definitions.AvailableModels(available_models)
 
         # send
-        self.send_message(
-            message_definitions.AVAILABLE_MODELS,
-            msg_content
-        )
+        self.send_message(msg)
 
     '''=======================================
     EVENT HANDLERS
@@ -121,71 +114,46 @@ class ClientMessageProcessor(AppComponent):
     def on_model_loaded(self, terrain_model: GridMeshModel):
 
         # create message content
-        elevation_map = terrain_model.data.tolist()
+        elevations = terrain_model.data.tolist()
         obstacles = terrain_model.obstacles.astype(int).tolist()
-        msg_content = {
-            'resolution': terrain_model.resolution,
-            'elevation_map': elevation_map,
-            'obstacles': obstacles,
-        }
+        msg = message_definitions.ModelLoaded(
+            terrain_model.resolution,
+            elevations,
+            obstacles
+        )
 
         # send
-        self.send_message(
-            message_definitions.MODEL_LOADED,
-            msg_content
-        )
+        self.send_message(msg)
 
     def on_start_point_set(self, row, column):
 
         # create message content
-        msg_content = {
-            'row': row,
-            'column': column,
-        }
+        msg = message_definitions.StartPointSet(row, column)
 
         # send
-        self.send_message(
-            message_definitions.START_POINT_SET,
-            msg_content
-        )
+        self.send_message(msg)
 
     def on_end_point_set(self, row, column):
 
         # create message content
-        msg_content = {
-            'row': row,
-            'column': column,
-        }
+        msg = message_definitions.EndPointSet(row, column)
 
         # send
-        self.send_message(
-            message_definitions.END_POINT_SET,
-            msg_content
-        )
+        self.send_message(msg)
 
     def on_obstacles_changed(self, obstacles):
 
         # create message content
         obstacles = obstacles.astype(int).tolist()
-        msg_content = {
-            'obstacles': obstacles,
-        }
+        msg = message_definitions.ObstaclesChanged(obstacles)
 
         # send
-        self.send_message(
-            message_definitions.OBSTACLES_CHANGED,
-            msg_content
-        )
+        self.send_message(msg)
 
     def on_path_found(self, path):
 
         # create message content
-        msg_content = {
-            'path': path,
-        }
+        msg = message_definitions.PathFound(path)
 
         # send
-        self.send_message(
-            message_definitions.OBSTACLES_CHANGED,
-            msg_content
-        )
+        self.send_message(msg)

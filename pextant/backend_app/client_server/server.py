@@ -122,22 +122,22 @@ class Server(AppComponent):
     '''=======================================
     CONNECTED CLIENTS
     ======================================='''
-    def send_message_to_client(self, client_socket, msg_type, msg_content):
+    def send_message_to_client(self, client_socket, msg):
 
         # if client is in list of connected
         if client_socket in self.connected_client_handlers:
 
             # get handler and send a message
             client_event_handler = self.connected_client_handlers[client_socket]
-            client_event_handler.enqueue_message(msg_type, msg_content)
+            client_event_handler.enqueue_message(msg)
 
-    def send_message_to_all_clients(self, msg_type, msg_content):
+    def send_message_to_all_clients(self, msg):
 
         # for each connected client
         for client_socket in self.connected_client_handlers.keys():
 
             # send the message
-            self.send_message_to_client(client_socket, msg_type, msg_content)
+            self.send_message_to_client(client_socket, msg)
 
     def _accept_pending_connection(self):
 

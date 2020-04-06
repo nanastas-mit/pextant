@@ -14,11 +14,6 @@ from pextant.backend_app.client_server.client_data_stream_handler import ClientD
 HOST_NAME = 'localhost'
 HOST_PORT = 3000
 
-MESSAGE_TYPE_KEY = ClientDataStreamHandler.MESSAGE_TYPE_KEY
-CONTENT_ENCODING_KEY = ClientDataStreamHandler.CONTENT_ENCODING_KEY
-BYTE_ORDER_KEY = ClientDataStreamHandler.BYTE_ORDER_KEY
-CONTENT_LENGTH_KEY = ClientDataStreamHandler.CONTENT_LENGTH_KEY
-
 def _json_encode(obj, encoding):
     return json.dumps(obj, ensure_ascii=False).encode(encoding)
 
@@ -34,16 +29,15 @@ def create_message(action, value):
 
     print("create_request", action, value)
 
-    message_type = message_definitions.SIMPLE
+    msg = message_definitions.SimpleMessage(action, value)
     content_encoding = "utf-8"
-    content = {"action": action, "value": value}
-    content_bytes = _json_encode(content, content_encoding)
+    content_bytes = _json_encode(msg.content, content_encoding)
 
     jsonheader = {
-        MESSAGE_TYPE_KEY: message_type,
-        CONTENT_ENCODING_KEY: content_encoding,
-        BYTE_ORDER_KEY: sys.byteorder,
-        CONTENT_LENGTH_KEY: len(content_bytes),
+        message_definitions.MESSAGE_IDENTIFIER_KEY: msg.identifier(),
+        message_definitions.CONTENT_ENCODING_KEY: content_encoding,
+        message_definitions.BYTE_ORDER_KEY: sys.byteorder,
+        message_definitions.CONTENT_LENGTH_KEY: len(content_bytes),
     }
     jsonheader_bytes = _json_encode(jsonheader, content_encoding)
     message_hdr = struct.pack("<i", len(jsonheader_bytes))
@@ -105,14 +99,14 @@ def process_jsonheader(recv_buffer, jsonheader_len):
 
 def process_response(_recv_buffer, jsonheader):
 
-    content_len = jsonheader[CONTENT_LENGTH_KEY]
+    content_len = jsonheader[message_definitions.CONTENT_LENGTH_KEY]
     if not len(_recv_buffer) >= content_len:
         return
 
     data = _recv_buffer[:content_len]
     _recv_buffer = _recv_buffer[content_len:]
 
-    encoding = jsonheader[CONTENT_ENCODING_KEY]
+    encoding = jsonheader[message_definitions.CONTENT_ENCODING_KEY]
     response = _json_decode(data, encoding)
 
     return response
