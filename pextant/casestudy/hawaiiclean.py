@@ -1,13 +1,15 @@
+import json
 from time import time
 
 from pextant.EnvironmentalModel import *
 from pextant.explorers import Astronaut
-from pextant.analysis.loadWaypoints import loadPoints
+from pextant.analysis.loadWaypoints import loadPointsOld
 from pextant.api_future import *
+from pextant.api import *
 
 
 def runpextant(filename, pointJSON=None):
-    waypoints = loadPoints(filename)
+    waypoints = loadPointsOld(filename)
     if pointJSON:
         point = json.loads(pointJSON)
         #lat, lon = waypoints.to(LAT_LONG)

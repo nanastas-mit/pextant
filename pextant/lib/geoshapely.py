@@ -53,20 +53,26 @@ class GeoType(object):
 
 
 class UTM(GeoType):
+
+    SYSTEM_NAME = 'utm'
+
     def __init__(self, zone_inter):
         zone = zone_inter if not isinstance(zone_inter, GeoPoint) else zone_inter.utm_reference.proj_param["zone"]
-        super(UTM, self).__init__("utm", ["easting", "northing"], {"proj": "utm", "zone": zone},
+        super(UTM, self).__init__(UTM.SYSTEM_NAME, ["easting", "northing"], {"proj": "utm", "zone": zone},
                                   ["easting", "northing"])
 
 
 class LatLon(GeoType):
+
+    SYSTEM_NAME = 'latlon'
+
     def __init__(self, reverse=False):
         if reverse:
             order = ["longitude", "latitude"]
         else:
             order = ["latitude", "longitude"]
 
-        super(LatLon, self).__init__("latlon", order, {"proj": "latlong"},
+        super(LatLon, self).__init__(LatLon.SYSTEM_NAME, order, {"proj": "latlong"},
                                      ["longitude", "latitude"])
 
     def to_utm(self, geo_point):
@@ -115,6 +121,9 @@ class XY(GeoType):
         return self.reorder(coords)
 
 class Cartesian(GeoType):
+
+    SYSTEM_NAME = 'coord'
+
     def __init__(self, origin, resolution, reverse=False):
         if reverse:
             order = ["y", "x"]
@@ -122,7 +131,7 @@ class Cartesian(GeoType):
             order = ["x", "y"]
 
         self.zone = origin.utm_reference.proj_param["zone"]
-        super(Cartesian, self).__init__("coord", order, {"proj": "utm", "zone": self.zone}, ["x", "y"])
+        super(Cartesian, self).__init__(Cartesian.SYSTEM_NAME, order, {"proj": "utm", "zone": self.zone}, ["x", "y"])
         # doing conversion early on will save use from redoing it later, we don't expect our origin to change too much
         self.origin_easting, self.origin_northing = origin.x, origin.y
         self.resolution = resolution

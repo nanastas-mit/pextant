@@ -126,6 +126,7 @@ class GDALMesh(GridMesh):
         srs = osr.SpatialReference(wkt=proj)
         projcs = srs.GetAttrValue('projcs')  # "NAD83 / UTM zone 5N"...hopefully
         regex_result = re.search('zone(\s|\_)(\d+)(\w)', projcs, flags=re.IGNORECASE)
+
         if regex_result:
             zone_number = regex_result.group(2)  # zone letter is group(2)
             nw_geo_point = GeoPoint(UTM(zone_number), nw_easting, nw_northing)
@@ -141,10 +142,12 @@ class GridMeshModel(EnvironmentalModel):
         self.isvaliddata = np.logical_not(self.data.mask) if isinstance(self.data, np.ma.core.MaskedArray) \
             else np.ones_like(self.data).astype(bool)
         self.searchKernel = SearchKernel(self.kernel_size, self.kernel_type)
+        self.UTM_REF = self.nw_geo_point.utm_reference
         self.ROW_COL = Cartesian(self.nw_geo_point, self.resolution, reverse=True)
         self.COL_ROW = Cartesian(self.nw_geo_point, self.resolution)
-        self.cache_neighbours()
-        self.cached_neighbours = self._cache_neighbours() if self.cached else []
+        self.cached_neighbours = []
+        if self.cached:
+            self.cache_neighbours()
 
     def _getMeshElement(self, mesh_coordinates):
         if len(self._inBounds(mesh_coordinates))>0:
@@ -210,7 +213,7 @@ class GridMeshModel(EnvironmentalModel):
         return len(self._hasdata(mesh_coordinate)) > 0
 
     def maxSlopeObstacle(self, maxSlope):
-        self.obstacles = self.slopes > maxSlope  # TODO - do we need an absolute value here?
+        self.obstacles = self.slopes > maxSlope
         self.passable = np.logical_not(self.obstacles)
 
     def _isPassable(self, mesh_coordinates):
@@ -330,7 +333,7 @@ def load_obstacle_map(filename):
     dataset = NpDataset(data, resolution=1.0)
     gp = GeoPoint(UTM(1), 0, 0)
     grid_mesh = GridMesh(gp, dataset)
-    model = grid_mesh.loadSubSection(maxSlope=90, cached=True)
+    model = grid_mesh.loadSubSection(maxSlope=90, cached=False)
 
     # convert to 0/1 values
     if len(pixel_values) > 0 and isinstance(pixel_values[0], tuple):

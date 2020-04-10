@@ -52,9 +52,34 @@ class SimpleMessage(BaseMessage):
 '''=======================================
 PATH FINDING
 ======================================='''
-# model selection
-class AvailableModelRequest(BaseMessage):
+# scenarios
+class AvailableScenarioRequest(BaseMessage):
     def __int__(self):
+        super.__init__()
+
+class AvailableScenarios(BaseMessage):
+    def __init__(self, available_scenarios):
+        self.available_scenarios = available_scenarios
+        super().__init__()
+
+class ScenarioLoadRequest(BaseMessage):
+    def __init__(self, scenario_to_load):
+        self.scenario_to_load = scenario_to_load
+        super().__init__()
+
+class ScenarioLoaded(BaseMessage):
+    def __init__(self, resolution, elevations, obstacles, start_coordinates, start_heading, end_coordinates):
+        self.resolution = resolution
+        self.elevations = elevations
+        self.obstacles = obstacles
+        self.start_coordinates = start_coordinates
+        self.start_heading = start_heading
+        self.end_coordinates = end_coordinates
+        super().__init__()
+
+# models
+class AvailableModelRequest(BaseMessage):
+    def __init__(self):
         super().__init__()
 
 class AvailableModels(BaseMessage):
@@ -62,7 +87,6 @@ class AvailableModels(BaseMessage):
         self.available_models = available_models
         super().__init__()
 
-# model loading
 class ModelLoadRequest(BaseMessage):
     def __init__(self, model_to_load, max_slope):
         self.model_to_load = model_to_load
@@ -78,34 +102,29 @@ class ModelLoaded(BaseMessage):
 
 # endpoints
 class StartPointSetRequest(BaseMessage):
-    def __init__(self, row, column):
-        self.row = row
-        self.column = column
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
         super().__init__()
 
 class StartPointSet(BaseMessage):
-    def __init__(self, row, column):
-        self.row = row
-        self.column = column
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
         super().__init__()
 
 class EndPointSetRequest(BaseMessage):
-    def __init__(self, row, column):
-        self.row = row
-        self.column = column
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
         super().__init__()
 
 class EndPointSet(BaseMessage):
-    def __init__(self, row, column):
-        self.row = row
-        self.column = column
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
         super().__init__()
 
 # obstacle setting
 class RadialObstacleSetRequest(BaseMessage):
-    def __init__(self, row, column, radius, state):
-        self.row = row
-        self.column = column
+    def __init__(self, coordinates, radius, state):
+        self.coordinates = coordinates
         self.radius = radius
         self.state = state
         super().__init__()
@@ -136,11 +155,15 @@ message_identifiers = {
     # general
     SimpleMessage: next(_message_identifier_count),
 
-    # model selection
+    # scenarios
+    AvailableScenarioRequest: next(_message_identifier_count),
+    AvailableScenarios: next(_message_identifier_count),
+    ScenarioLoadRequest: next(_message_identifier_count),
+    ScenarioLoaded: next(_message_identifier_count),
+
+    # models
     AvailableModelRequest: next(_message_identifier_count),
     AvailableModels: next(_message_identifier_count),
-
-    # model loading
     ModelLoadRequest: next(_message_identifier_count),
     ModelLoaded: next(_message_identifier_count),
 

@@ -1,0 +1,8 @@
+{
+  "model": "arboretum.img",
+  "max_slope": 10,
+  "start": [714, 1026],
+  "end": [530, 868],
+  "coordinate_system": "coord",
+  "initial_heading": 180.0
+}

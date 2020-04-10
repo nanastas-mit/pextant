@@ -1,11 +1,11 @@
-import os
 import pextant.backend_app.events.event_definitions as event_definitions
-from os import path as path
+import pextant.backend_app.utils as utils
+from os import path
 from pextant.backend_app.app_component import AppComponent
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.EnvironmentalModel import load_legacy, GDALMesh, load_obstacle_map
 from pextant.explorers import Astronaut
-from pextant.lib.geoshapely import GeoPoint
+from pextant.lib.geoshapely import GeoPoint, UTM, LatLon, Cartesian, LAT_LONG
 from pextant.solvers.astarMesh import ExplorerCost
 from pextant_cpp import PathFinder
 from threading import Thread
@@ -18,7 +18,8 @@ class PathManager(AppComponent):
     FIELDS
     ======================================='''
     # consts
-    MODELS_DIRECTORY = "models"
+    SCENARIOS_DIRECTORY = 'scenarios'
+    MODELS_DIRECTORY = 'models'
 
     # properties
     @property
@@ -50,6 +51,10 @@ class PathManager(AppComponent):
 
         # register for events
         event_dispatcher: EventDispatcher = EventDispatcher.instance()
+        event_dispatcher.register_listener(
+            event_definitions.SCENARIO_LOAD_REQUESTED,
+            self.create_threaded_switch(self.load_scenario)
+        )
         event_dispatcher.register_listener(
             event_definitions.MODEL_LOAD_REQUESTED,
             self.create_threaded_switch(self.load_model)
@@ -86,19 +91,66 @@ class PathManager(AppComponent):
             thread.join()
 
     '''=======================================
+    SCENARIOS
+    ======================================='''
+    @staticmethod
+    def get_available_scenarios():
+        """gets list of available scenarios to be loaded.
+        A scenario is a set of features that are needed to produce a full 'path-walking' experience -
+        a model, a max slope, a start point, an initial heading, and an end point"""
+
+        return utils.get_files_in_subdirectory(PathManager.SCENARIOS_DIRECTORY)
+
+    def load_scenario(self, scenario_to_load):
+        """Loads the specified scenario.
+        A scenario is a set of features that are needed to produce a full 'path-walking' experience -
+        a model, a max slope, a start point, an initial heading, and an end point"""
+
+        # read in the scenario file
+        local_path_file_name = path.join(PathManager.SCENARIOS_DIRECTORY, scenario_to_load)
+        in_file = open(local_path_file_name, 'rb')
+        json_bytes = in_file.read()
+        in_file.close()
+
+        # decode json
+        scenario = utils.json_decode(json_bytes)
+        model = scenario['model']
+        max_slope = scenario['max_slope']
+        start_coordinates = scenario['start']
+        end_coordinates = scenario['end']
+        coordinate_system = scenario['coordinate_system']
+        initial_heading = scenario['initial_heading']
+
+        # model
+        self.load_model(model, max_slope, False)
+        # endpoint setting
+        self.set_start_point(start_coordinates, coordinate_system, False)
+        self.set_end_point(end_coordinates, coordinate_system, False)
+        # caching
+        self.cache_costs(False)
+        self.cache_obstacles(False)
+        self.cache_heuristics(False)
+
+        # all done! dispatch event
+        EventDispatcher.instance().trigger_event(
+            event_definitions.SCENARIO_LOAD_COMPLETE,
+            self.terrain_model,
+            self.start_point,
+            self.end_point,
+            initial_heading
+        )
+
+    '''=======================================
     MODELS
     ======================================='''
     @staticmethod
     def get_available_models():
+        """gets list of available model files that can be loaded"""
 
-        # get list of files in models folder
-        cwd = os.getcwd()
-        models_dir = path.join(cwd, PathManager.MODELS_DIRECTORY)
-        model_files = [f for f in os.listdir(models_dir) if path.isfile(path.join(models_dir, f))]
+        return utils.get_files_in_subdirectory(PathManager.MODELS_DIRECTORY)
 
-        return model_files
-
-    def load_model(self, model_to_load, max_slope):
+    def load_model(self, model_to_load, max_slope, dispatch_completed_event=True):
+        """load terrain model from data at specified 'model_to_load' location"""
 
         # get the name of the file of the model to load
         local_path_file_name = path.join(PathManager.MODELS_DIRECTORY, model_to_load)
@@ -123,9 +175,11 @@ class PathManager(AppComponent):
         self.cost_function = ExplorerCost(self.agent, self.terrain_model, 'Energy', cached=False)
 
         # dispatch loaded event
-        EventDispatcher.instance().trigger_event(event_definitions.MODEL_LOAD_COMPLETE, self.terrain_model)
+        if dispatch_completed_event:
+            EventDispatcher.instance().trigger_event(event_definitions.MODEL_LOAD_COMPLETE, self.terrain_model)
 
     def unload_model(self):
+        """Unload (and clear cache) of whatever model is in memory"""
 
         # unload model, cost function
         self.terrain_model = None
@@ -144,20 +198,22 @@ class PathManager(AppComponent):
     '''=======================================
     ENDPOINTS
     ======================================='''
-    def set_start_point(self, row, column):
+    def set_start_point(self, coordinates, coordinate_system, dispatch_completed_event=True):
+        """specify the point at which path-finding should begin"""
 
         # if no terrain model, early out
         if not self.terrain_model:
             return
 
-        # set point
-        geo_point = GeoPoint(self.terrain_model.ROW_COL, row, column)
-        self.start_point = geo_point
+        # set start
+        self.start_point = self.create_geo_point_from_coordinates(coordinates, coordinate_system)
 
         # dispatch event
-        EventDispatcher.instance().trigger_event(event_definitions.START_POINT_SET_COMPLETE, row, column)
+        if dispatch_completed_event:
+            EventDispatcher.instance().trigger_event(event_definitions.START_POINT_SET_COMPLETE, self.start_point)
 
-    def set_end_point(self, row, column):
+    def set_end_point(self, coordinates, coordinate_system, dispatch_completed_event=True):
+        """specify the point at which path-finding should end"""
 
         # if no terrain model, early out
         if not self.terrain_model:
@@ -167,16 +223,18 @@ class PathManager(AppComponent):
         self.path_finder.clear_heuristics()
 
         # set the point
-        geo_point = GeoPoint(self.terrain_model.ROW_COL, row, column)
-        self.end_point = geo_point
+        self.end_point = self.create_geo_point_from_coordinates(coordinates, coordinate_system)
 
         # dispatch event
-        EventDispatcher.instance().trigger_event(event_definitions.END_POINT_SET_COMPLETE, row, column)
+        if dispatch_completed_event:
+            EventDispatcher.instance().trigger_event(event_definitions.END_POINT_SET_COMPLETE, self.end_point)
 
     '''=======================================
     CACHING
     ======================================='''
-    def cache_costs(self):
+    def cache_costs(self, dispatch_completed_event=True):
+        """calculates costs from every node to all of its 8 adjacent nodes, stores
+        that data in path_finder (C++) memory. Having data + algorithm in C++ speeds things up considerably"""
 
         # if no terrain model or cost function, early out
         if not self.terrain_model or not self.cost_function:
@@ -188,9 +246,12 @@ class PathManager(AppComponent):
         self.path_finder.cache_costs(cost_map)
 
         # dispatch caching complete event
-        EventDispatcher.instance().trigger_event(event_definitions.COSTS_CACHING_COMPLETE)
+        if dispatch_completed_event:
+            EventDispatcher.instance().trigger_event(event_definitions.COSTS_CACHING_COMPLETE)
 
-    def cache_obstacles(self):
+    def cache_obstacles(self, dispatch_completed_event=True):
+        """stores obstacle data in path_finder (C++) memory.
+        Having data + algorithm in C++ speeds things up considerably"""
 
         # if no terrain model, early out
         if not self.terrain_model:
@@ -201,9 +262,12 @@ class PathManager(AppComponent):
         self.path_finder.cache_obstacles(obstacle_map)
 
         # dispatch caching complete event
-        EventDispatcher.instance().trigger_event(event_definitions.OBSTACLES_CACHING_COMPLETE)
+        if dispatch_completed_event:
+            EventDispatcher.instance().trigger_event(event_definitions.OBSTACLES_CACHING_COMPLETE)
 
-    def cache_heuristics(self):
+    def cache_heuristics(self, dispatch_completed_event=True):
+        """calculates heuristic cost from every node to the specified end point, stores
+        that data in path_finder (C++) memory. Having data + algorithm in C++ speeds things up considerably."""
 
         # if no terrain model, cost function, or end_point, early out
         if not self.terrain_model or not self.cost_function or not self.end_point:
@@ -215,20 +279,24 @@ class PathManager(AppComponent):
         self.path_finder.cache_heuristics(heuristics_map)
 
         # dispatch caching complete event
-        EventDispatcher.instance().trigger_event(event_definitions.HEURISTICS_CACHING_COMPLETE)
+        if dispatch_completed_event:
+            EventDispatcher.instance().trigger_event(event_definitions.HEURISTICS_CACHING_COMPLETE)
 
     '''=======================================
     PATH FINDING & MANIPULATION
     ======================================='''
-    def set_radial_obstacle(self, row, column, radius, state):
+    def set_radial_obstacle(self, coordinates, coordinate_system, radius, state):
+        """Mark a circle of specified radius at the specified location as either
+        an obstacle (state=true) or passable (state=false)"""
 
         # clear cached obstacles
         self.path_finder.clear_obstacles()
 
         # convert to appropriate coordinates
-        geo_point = GeoPoint(self.terrain_model.ROW_COL, row, column)
+        geo_point = self.create_geo_point_from_coordinates(coordinates, coordinate_system)
         elt = self.terrain_model.getMeshElement(geo_point)
 
+        # TODO: USE setRadialKeepOutZone?
         self.terrain_model.set_circular_obstacle(
             (elt.x, elt.y),
             radius * self.terrain_model.resolution,
@@ -242,6 +310,7 @@ class PathManager(AppComponent):
         )
 
     def find_path(self):
+        """If all relevant data has been set (model, start/end points, chaches), finds an optimal path"""
 
         # if no terrain model, start_point, end_point, or cache, early out
         if not self.terrain_model or not self.start_point or not self.end_point or not self.all_data_cached:
@@ -262,6 +331,8 @@ class PathManager(AppComponent):
     HELPERS
     ======================================='''
     def create_threaded_switch(self, func):
+        """function that - based on value of self.threaded - returns another function that runs either
+        on main thread (threaded=false) or on a separate thread (threaded=true)"""
 
         # start new thread if specified
         if self.threaded:
@@ -279,3 +350,17 @@ class PathManager(AppComponent):
             def unthreaded_func(*args, **kwargs):
                 func(*args, **kwargs)
             return unthreaded_func
+
+    def create_geo_point_from_coordinates(self, coordinates, coordinate_system) -> GeoPoint:
+        """Takes a set of coordinates and a coordinate system, returns geo_point
+        in location specified (with respect to terrain_model for UTM and ROW_COL)"""
+
+        if coordinate_system == LatLon.SYSTEM_NAME:
+            geo_point = GeoPoint(LAT_LONG, coordinates[0], coordinates[1])
+        elif coordinate_system == Cartesian.SYSTEM_NAME:
+            geo_point = GeoPoint(self.terrain_model.ROW_COL, coordinates[0], coordinates[1])
+        else:  # assume UTM (coordinate_system == UTM.SYSTEM_NAME)
+            geo_point = GeoPoint(self.terrain_model.utm_reference, coordinates[0], coordinates[1])
+
+        return geo_point
+

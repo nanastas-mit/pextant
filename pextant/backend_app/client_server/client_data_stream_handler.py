@@ -1,7 +1,6 @@
-import io
-import json
-import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.client_server.message_definitions as message_definitions
+import pextant.backend_app.events.event_definitions as event_definitions
+import pextant.backend_app.utils as utils
 import sys
 import selectors
 import struct
@@ -137,9 +136,7 @@ class ClientDataStreamHandler:
         if len(self._recv_buffer) >= header_length:
 
             # process it and remove relevant data from buffer front
-            self.jsonheader = self._json_decode(
-                self._recv_buffer[:header_length], "utf-8"
-            )
+            self.jsonheader = utils.json_decode(self._recv_buffer[:header_length])
             self._recv_buffer = self._recv_buffer[header_length:]
 
             # check to make sure header has everything required
@@ -160,7 +157,7 @@ class ClientDataStreamHandler:
 
         # convert from json
         encoding = self.jsonheader[message_definitions.CONTENT_ENCODING_KEY]
-        content = self._json_decode(serialized_content, encoding)
+        content = utils.json_decode(serialized_content, encoding)
 
         # transform into message class
         msg = message_definitions.create_message_from_id(
@@ -181,15 +178,6 @@ class ClientDataStreamHandler:
     def _reset_after_read(self):
         self._jsonheader_len = None
         self.jsonheader = None
-
-    @staticmethod
-    def _json_decode(json_bytes, encoding):
-        tiow = io.TextIOWrapper(
-            io.BytesIO(json_bytes), encoding=encoding, newline=""
-        )
-        obj = json.load(tiow)
-        tiow.close()
-        return obj
 
     '''=======================================
     WRITE METHODS
@@ -218,7 +206,7 @@ class ClientDataStreamHandler:
 
         # create message
         content_encoding = "utf-8"
-        content_bytes = self._json_encode(msg.content, "utf-8")
+        content_bytes = utils.json_encode(msg.content, content_encoding)
 
         # serialize the message
         serialized_message = self._serialize_message(msg.identifier(), content_encoding, content_bytes)
@@ -235,7 +223,7 @@ class ClientDataStreamHandler:
         }
 
         # convert dictionary header to json byte string
-        json_header_bytes = self._json_encode(json_header, "utf-8")
+        json_header_bytes = utils.json_encode(json_header)
 
         # create the proto header
         proto_header = struct.pack("<i", len(json_header_bytes))
@@ -247,12 +235,3 @@ class ClientDataStreamHandler:
     def _reset_after_write(self):
         self._send_buffer = b""
         self._set_selector_events_mask("r")
-
-    @staticmethod
-    def _json_encode(obj, encoding):
-        return json.dumps(obj, ensure_ascii=False).encode(encoding)
-
-
-
-
-

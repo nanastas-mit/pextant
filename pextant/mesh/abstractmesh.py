@@ -8,6 +8,7 @@ from skimage.draw import circle
 from pextant.explorers import Astronaut
 
 class GeoMesh(object):
+
     def __init__(self, nw_geo_point, dataset, planet='Earth',
                  parent_mesh=None, xoff=0, yoff=0):
         self.dataset = dataset

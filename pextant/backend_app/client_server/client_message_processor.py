@@ -1,8 +1,9 @@
 import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.client_server.message_definitions as message_definitions
 from pextant.backend_app.app_component import AppComponent
-from pextant.backend_app.dependency_injection import RequiredFeature, has_methods
+from pextant.backend_app.dependency_injection import RequiredFeature, has_attributes, has_methods
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
+from pextant.lib.geoshapely import Cartesian, GeoPoint
 from pextant.backend_app.path_manager import PathManager
 from pextant.EnvironmentalModel import GridMeshModel
 
@@ -22,6 +23,10 @@ class ClientMessageProcessor(AppComponent):
             "server",
             has_methods("send_message_to_all_clients")
         ).result
+        self.path_manager = RequiredFeature(
+            "path_manager",
+            has_attributes("terrain_model")
+        ).result
 
         # EVENT REGISTRATION
         event_dispatcher = EventDispatcher.instance()
@@ -29,6 +34,7 @@ class ClientMessageProcessor(AppComponent):
         event_dispatcher.register_listener(event_definitions.SEND_MESSAGE_REQUESTED, self.on_send_message_requested)
         event_dispatcher.register_listener(event_definitions.MESSAGE_RECEIVED, self.on_message_received)
         # path finding
+        event_dispatcher.register_listener(event_definitions.SCENARIO_LOAD_COMPLETE, self.on_scenario_loaded)
         event_dispatcher.register_listener(event_definitions.MODEL_LOAD_COMPLETE, self.on_model_loaded)
         event_dispatcher.register_listener(event_definitions.START_POINT_SET_COMPLETE, self.on_start_point_set)
         event_dispatcher.register_listener(event_definitions.END_POINT_SET_COMPLETE, self.on_end_point_set)
@@ -51,15 +57,23 @@ class ClientMessageProcessor(AppComponent):
               f"  ID: {msg.identifier()} ({msg.__class__.__name__})\n"
               f"  content: {msg.content}")
 
-        # send available models response immediately
+        # send available models/scenarios response immediately
         if msg.identifier() == message_definitions.AvailableModelRequest.identifier():
             self.send_available_models_message()
+        elif msg.identifier() == message_definitions.AvailableScenarioRequest.identifier():
+            self.send_available_scenarios_message()
 
         # otherwise, transform into relevant event
         else:
 
+            # scenario load request
+            if msg.identifier() == message_definitions.ScenarioLoadRequest.identifier():
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.SCENARIO_LOAD_REQUESTED,
+                    msg.scenario_to_load
+                )
             # model load request
-            if msg.identifier() == message_definitions.ModelLoadRequest.identifier():
+            elif msg.identifier() == message_definitions.ModelLoadRequest.identifier():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.MODEL_LOAD_REQUESTED,
                     msg.model_to_load,
@@ -69,22 +83,22 @@ class ClientMessageProcessor(AppComponent):
             elif msg.identifier() == message_definitions.StartPointSetRequest.identifier():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.START_POINT_SET_REQUESTED,
-                    msg.row,
-                    msg.column
+                    msg.coordinates,
+                    Cartesian.SYSTEM_NAME
                 )
             # end point set request
             elif msg.identifier() == message_definitions.EndPointSetRequest.identifier():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.END_POINT_SET_REQUESTED,
-                    msg.row,
-                    msg.column
+                    msg.coordinates,
+                    Cartesian.SYSTEM_NAME
                 )
             # radial obstacle set request
             elif msg.identifier() == message_definitions.RadialObstacleSetRequest.identifier():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.RADIAL_OBSTACLE_SET_REQUESTED,
-                    msg.row,
-                    msg.column,
+                    msg.coordinates,
+                    Cartesian.SYSTEM_NAME,
                     msg.radius,
                     msg.state
                 )
@@ -108,10 +122,42 @@ class ClientMessageProcessor(AppComponent):
         # send
         self.send_message(msg)
 
+    def send_available_scenarios_message(self):
+
+        # create message content
+        available_scenarios = PathManager.get_available_scenarios()
+        msg = message_definitions.AvailableScenarios(available_scenarios)
+
+        # send
+        self.send_message(msg)
+
     '''=======================================
     EVENT HANDLERS
     ======================================='''
-    def on_model_loaded(self, terrain_model: GridMeshModel):
+    def on_scenario_loaded(self, terrain_model, start_point, end_point, initial_heading):
+
+        # model
+        elevations = terrain_model.data.tolist()
+        obstacles = terrain_model.obstacles.astype(int).tolist()
+
+        # endpoints
+        start_coordinates = start_point.to(self.path_manager.terrain_model.ROW_COL).tolist()
+        end_coordinates = end_point.to(self.path_manager.terrain_model.ROW_COL).tolist()
+
+        # create message content
+        msg = message_definitions.ScenarioLoaded(
+            terrain_model.resolution,
+            elevations,
+            obstacles,
+            start_coordinates,
+            initial_heading,
+            end_coordinates
+        )
+
+        # send
+        self.send_message(msg)
+
+    def on_model_loaded(self, terrain_model):
 
         # create message content
         elevations = terrain_model.data.tolist()
@@ -125,18 +171,20 @@ class ClientMessageProcessor(AppComponent):
         # send
         self.send_message(msg)
 
-    def on_start_point_set(self, row, column):
+    def on_start_point_set(self, start_point: GeoPoint):
 
         # create message content
-        msg = message_definitions.StartPointSet(row, column)
+        coordinates = start_point.to(self.path_manager.terrain_model.ROW_COL).tolist()
+        msg = message_definitions.StartPointSet(coordinates)
 
         # send
         self.send_message(msg)
 
-    def on_end_point_set(self, row, column):
+    def on_end_point_set(self, start_point: GeoPoint):
 
         # create message content
-        msg = message_definitions.EndPointSet(row, column)
+        coordinates = start_point.to(self.path_manager.terrain_model.ROW_COL).tolist()
+        msg = message_definitions.EndPointSet(coordinates)
 
         # send
         self.send_message(msg)

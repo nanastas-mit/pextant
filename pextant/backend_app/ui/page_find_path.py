@@ -11,6 +11,7 @@ from matplotlib.lines import Line2D
 from matplotlib.pyplot import Circle
 from pextant.backend_app.dependency_injection import RequiredFeature, has_attributes
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
+from pextant.lib.geoshapely import Cartesian, GeoPoint
 from pextant.backend_app.path_manager import PathManager
 from pextant.backend_app.ui.page_base import PageBase
 
@@ -69,7 +70,8 @@ class BannerCell:
             self._parent_page_setup_func(self, cell_frame, cell_data)
 
     def refresh(self):
-        self._parent_page_refresh_func(self)
+        if self._parent_page_refresh_func:
+            self._parent_page_refresh_func(self)
 
 
 class PageFindPath(PageBase):
@@ -82,16 +84,18 @@ class PageFindPath(PageBase):
 
     # 'enum' for current state
     STATE_READY = 1
-    STATE_LOADING_MODEL = 2
-    STATE_SETTING_START = 3
-    STATE_SETTING_END = 4
-    STATE_SETTING_OBSTACLE = 5
-    STATE_CACHING_COSTS = 6
-    STATE_FINDING_PATH = 7
+    STATE_LOADING_SCENARIO = 2
+    STATE_LOADING_MODEL = 3
+    STATE_SETTING_START = 4
+    STATE_SETTING_END = 5
+    STATE_SETTING_OBSTACLE = 6
+    STATE_CACHING_COSTS = 7
+    STATE_FINDING_PATH = 8
 
     # by-state text lookup ui objects
     NOTIFICATION_LBL_TEXT = {
         STATE_READY: "...",
+        STATE_LOADING_SCENARIO: "Loading Scenario...",
         STATE_LOADING_MODEL: "Loading Model...",
         STATE_SETTING_START: "Setting Start...",
         STATE_SETTING_END: "Setting End...",
@@ -102,22 +106,32 @@ class PageFindPath(PageBase):
 
     # button data
     CELL_DATA = {
-        'load_model':
-            {'title': 'Load Model'},
-        'cache_data':
-            {'title': 'Cache Data',
-             'costs_btn_text': 'Costs',
-             'obstacles_btn_text': 'Obstacles',
-             'heuristics_btn_text': 'Heuristics'},
-        'set_endpoints':
-            {'title': 'Set Endpoints',
-             'start_btn_text': 'Set Start',
-             'end_btn_text': 'Set End'},
-        'set_obstacle':
-            {'title': 'Set Obstacle'},
-        'find_path':
-            {'title': 'Find Path',
-             'btn_text': 'Find'},
+        'load_scenario': {
+            'title': 'Scenarios',
+            'btn_text': 'Load'
+        },
+        'load_model': {
+            'title': 'Terrain Model',
+            'btn_text': 'Load'
+        },
+        'cache_data': {
+            'title': 'Cache Data',
+            'costs_btn_text': 'Costs',
+            'obstacles_btn_text': 'Obstacles',
+            'heuristics_btn_text': 'Heuristics'
+        },
+        'set_endpoints': {
+            'title': 'Set Endpoints',
+            'start_btn_text': 'Set Start',
+            'end_btn_text': 'Set End'
+        },
+        'set_obstacle': {
+            'title': 'Set Obstacle'
+        },
+        'find_path': {
+            'title': 'Find Path',
+            'btn_text': 'Find'
+        },
     }
 
     # properties
@@ -132,7 +146,7 @@ class PageFindPath(PageBase):
         # if ui has been initialized
         if self.ui_initialized:
 
-            self.notification_lbl['text'] = PageFindPath.NOTIFICATION_LBL_TEXT[self._state]
+            self.notification_lbl['text'] = PageFindPath.NOTIFICATION_LBL_TEXT.get(self._state, "Doing Something...")
 
             # refresh all buttons based on new state
             for btn in self.banner_cells:
@@ -156,26 +170,13 @@ class PageFindPath(PageBase):
             # update radius
             self.pending_obstacle_artist.radius = self._obstacle_radius
 
-    @property
-    def max_slope(self):
-        return self._max_slope
-    @max_slope.setter
-    def max_slope(self, new_max_slope):
-
-        self._max_slope = new_max_slope
-
-        # if ui has been initialized
-        if self.ui_initialized:
-
-            # update radius
-            self.pending_obstacle_artist.radius = self._obstacle_radius
-
     '''=======================================
     STARTUP/SHUTDOWN
     ======================================='''
     def __init__(self, master):
 
         super().__init__(master, {
+            event_definitions.SCENARIO_LOAD_COMPLETE: self.on_scenario_loaded,
             event_definitions.MODEL_LOAD_COMPLETE: self.on_model_loaded,
             event_definitions.MODEL_UNLOAD_COMPLETE: self.on_model_unloaded,
             event_definitions.START_POINT_SET_COMPLETE: self.on_start_point_set,
@@ -200,9 +201,10 @@ class PageFindPath(PageBase):
         self.ui_initialized = False
         self.notification_lbl = None
         self.banner_cells = []
-        self.obstacle_radius = 20
+        self.scenario_to_load = ''
+        self.model_to_load = ''
         self.max_slope = 10
-        self.model_to_load = ""
+        self.obstacle_radius = 20
 
         # graph references
         self.blitted_texture = None
@@ -312,8 +314,8 @@ class PageFindPath(PageBase):
                     # issue start point set request
                     EventDispatcher.instance().trigger_event(
                         event_definitions.START_POINT_SET_REQUESTED,
-                        clicked_row,
-                        clicked_column
+                        (clicked_row, clicked_column),
+                        Cartesian.SYSTEM_NAME
                     )
 
                 # otherwise, if setting end...
@@ -322,8 +324,8 @@ class PageFindPath(PageBase):
                     # issue end point set request
                     EventDispatcher.instance().trigger_event(
                         event_definitions.END_POINT_SET_REQUESTED,
-                        clicked_row,
-                        clicked_column
+                        (clicked_row, clicked_column),
+                        Cartesian.SYSTEM_NAME
                     )
 
             # if setting obstacle
@@ -332,8 +334,8 @@ class PageFindPath(PageBase):
                 # issue obstacle set request
                 EventDispatcher.instance().trigger_event(
                     event_definitions.RADIAL_OBSTACLE_SET_REQUESTED,
-                    clicked_row,
-                    clicked_column,
+                    (clicked_row, clicked_column),
+                    Cartesian.SYSTEM_NAME,
                     self.obstacle_radius,
                     event.button == MouseButton.LEFT
                 )
@@ -358,6 +360,12 @@ class PageFindPath(PageBase):
     '''=======================================
     APP EVENT HANDLERS
     ======================================='''
+    def on_scenario_loaded(self, terrain_model, start_point, end_point, initial_heading):
+
+        self.on_model_loaded(terrain_model)
+        self.on_start_point_set(start_point)
+        self.on_end_point_set(end_point)
+
     def on_model_loaded(self, terrain_model):
 
         # create the terrain image
@@ -395,15 +403,16 @@ class PageFindPath(PageBase):
         self.refresh_ui()
         self.redraw_canvas()
 
-    def on_start_point_set(self, row, column):
-        self.on_any_point_set(self.start_point_line, row, column)
+    def on_start_point_set(self, start_point: GeoPoint):
+        self.on_any_point_set(start_point, self.start_point_line)
 
-    def on_end_point_set(self, row, column):
-        self.on_any_point_set(self.end_point_line, row, column)
+    def on_end_point_set(self, end_point: GeoPoint):
+        self.on_any_point_set(end_point, self.end_point_line)
 
-    def on_any_point_set(self, set_point_line: Line2D, row, column):
+    def on_any_point_set(self, set_point: GeoPoint, set_point_line: Line2D):
 
         # set line (i.e. draw point)
+        row, column = set_point.to(self.path_manager.terrain_model.ROW_COL)
         set_point_line.set_data([column], [row])
 
         # clear path (we've moved an endpoint => old path no longer valid)
@@ -445,6 +454,53 @@ class PageFindPath(PageBase):
     '''=======================================
     CELL FUNCTIONS
     ======================================='''
+    # load scenario
+    def setup_load_scenario_cell(self, cell: BannerCell, cell_frame, cell_data):
+
+        # get list of available scenarios
+        scenario_files = PathManager.get_available_scenarios()
+
+        # scenario dropdown
+        scenario_dropdown = ttk.Combobox(
+            cell_frame,
+            width=12,
+            state="readonly",
+            values=scenario_files
+        )
+        def scenario_dropdown_callback(e):
+            self.scenario_to_load = str(scenario_dropdown.get())
+        scenario_dropdown.bind("<<ComboboxSelected>>", scenario_dropdown_callback)
+        scenario_dropdown.current(0)
+        scenario_dropdown_callback(None)  # simulate a select of 'current'
+        scenario_dropdown.pack(padx=4, pady=4, side=tk.TOP)
+
+    def load_scenario_command(self):
+
+        # if we're not doing anything else
+        if self.state == PageFindPath.STATE_READY:
+
+            # note that we're loading
+            self.state = PageFindPath.STATE_LOADING_SCENARIO
+
+            # issue load model request
+            EventDispatcher.instance().trigger_event(
+                event_definitions.SCENARIO_LOAD_REQUESTED,
+                self.scenario_to_load
+            )
+
+    def refresh_load_scenario_cell(self, cell: BannerCell):
+
+        btn = cell.widgets["default_btn"]
+
+        # standard configuration
+        btn['state'] = tk.DISABLED
+
+        # READY
+        if self.state == PageFindPath.STATE_READY:
+
+            # enable / disable buttons based on existence of parameters
+            btn['state'] = tk.NORMAL
+
     # load model
     def setup_load_model_cell(self, cell: BannerCell, cell_frame, cell_data):
 
@@ -476,7 +532,6 @@ class PageFindPath(PageBase):
             orient=tk.HORIZONTAL,
             command=slider_command
         )
-        cell.widgets["slope_slider"] = slope_slider
         slope_slider.set(self.max_slope)
         slope_slider.pack(padx=4, pady=4, side=tk.TOP)
 
@@ -510,7 +565,7 @@ class PageFindPath(PageBase):
 
         # standard configuration
         btn['state'] = tk.DISABLED
-        btn['text'] = "Load Model" if not self.path_manager.terrain_model else "Unload Model"
+        btn['text'] = "Load" if not self.path_manager.terrain_model else "Unload"
 
         # READY
         if self.state == PageFindPath.STATE_READY:
