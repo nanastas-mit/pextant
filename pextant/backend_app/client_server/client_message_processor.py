@@ -1,3 +1,4 @@
+import numpy as np
 import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.client_server.message_definitions as message_definitions
 from pextant.backend_app.app_component import AppComponent
@@ -5,7 +6,6 @@ from pextant.backend_app.dependency_injection import RequiredFeature, has_attrib
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.lib.geoshapely import Cartesian, GeoPoint
 from pextant.backend_app.path_manager import PathManager
-from pextant.EnvironmentalModel import GridMeshModel
 
 
 class ClientMessageProcessor(AppComponent):
@@ -38,7 +38,10 @@ class ClientMessageProcessor(AppComponent):
         event_dispatcher.register_listener(event_definitions.MODEL_LOAD_COMPLETE, self.on_model_loaded)
         event_dispatcher.register_listener(event_definitions.START_POINT_SET_COMPLETE, self.on_start_point_set)
         event_dispatcher.register_listener(event_definitions.END_POINT_SET_COMPLETE, self.on_end_point_set)
-        event_dispatcher.register_listener(event_definitions.RADIAL_OBSTACLE_SET_COMPLETE, self.on_obstacles_changed)
+        event_dispatcher.register_listener(
+            event_definitions.OBSTACLE_LIST_SET_COMPLETE,
+            self.on_obstacle_list_set
+        )
         event_dispatcher.register_listener(event_definitions.PATH_FIND_COMPLETE, self.on_path_found)
 
     '''=======================================
@@ -93,14 +96,14 @@ class ClientMessageProcessor(AppComponent):
                     msg.coordinates,
                     Cartesian.SYSTEM_NAME
                 )
-            # radial obstacle set request
-            elif msg.identifier() == message_definitions.RadialObstacleSetRequest.identifier():
+            # obstacle set request
+            elif msg.identifier() == message_definitions.ObstacleListSetRequest.identifier():
                 EventDispatcher.instance().trigger_event(
-                    event_definitions.RADIAL_OBSTACLE_SET_REQUESTED,
-                    msg.coordinates,
+                    event_definitions.OBSTACLE_LIST_SET_REQUESTED,
+                    msg.coordinate_list,
                     Cartesian.SYSTEM_NAME,
-                    msg.radius,
-                    msg.state
+                    msg.state,
+                    True
                 )
             # path find request
             elif msg.identifier() == message_definitions.PathFindRequest.identifier():
@@ -189,11 +192,16 @@ class ClientMessageProcessor(AppComponent):
         # send
         self.send_message(msg)
 
-    def on_obstacles_changed(self, obstacles):
+    def on_obstacle_list_set(self, geo_point_list, state):
+
+        # create list of [row, col] coordinates
+        coordinate_list = []
+        for geo_point in geo_point_list:
+            coordinate = geo_point.to(self.path_manager.terrain_model.ROW_COL).tolist()
+            coordinate_list.append(coordinate)
 
         # create message content
-        obstacles = obstacles.astype(int).tolist()
-        msg = message_definitions.ObstaclesChanged(obstacles)
+        msg = message_definitions.ObstacleListSet(coordinate_list, state)
 
         # send
         self.send_message(msg)
@@ -201,6 +209,8 @@ class ClientMessageProcessor(AppComponent):
     def on_path_found(self, path):
 
         # create message content
+        numpy_list = np.array(path)
+        path = numpy_list.astype(int).tolist()  # argument 'path' is list of numpy ints - which json decoder fails with
         msg = message_definitions.PathFound(path)
 
         # send

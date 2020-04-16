@@ -343,7 +343,7 @@ def load_obstacle_map(filename):
     # add the obstacles to the model
     obstacle_map = np.array(np.logical_not(pixel_values))  # 'black' (i.e. '0') values are obstacles, want to only those
     obstacle_map = obstacle_map.reshape(img.height, img.width)
-    model.set_array_obstacle(obstacle_map)
+    model.set_obstacle_map(obstacle_map)
 
     return model
 

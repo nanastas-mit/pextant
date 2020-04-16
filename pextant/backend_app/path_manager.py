@@ -63,6 +63,7 @@ class PathManager(AppComponent):
         event_dispatcher.register_listener(event_definitions.START_POINT_SET_REQUESTED, self.set_start_point)
         event_dispatcher.register_listener(event_definitions.END_POINT_SET_REQUESTED, self.set_end_point)
         event_dispatcher.register_listener(event_definitions.RADIAL_OBSTACLE_SET_REQUESTED, self.set_radial_obstacle)
+        event_dispatcher.register_listener(event_definitions.OBSTACLE_LIST_SET_REQUESTED, self.set_obstacle_list),
         event_dispatcher.register_listener(
             event_definitions.COSTS_CACHING_REQUESTED,
             self.create_threaded_switch(self.cache_costs)
@@ -285,7 +286,7 @@ class PathManager(AppComponent):
     '''=======================================
     PATH FINDING & MANIPULATION
     ======================================='''
-    def set_radial_obstacle(self, coordinates, coordinate_system, radius, state):
+    def set_radial_obstacle(self, coordinates, coordinate_system, radius, state, cache_immediate=False):
         """Mark a circle of specified radius at the specified location as either
         an obstacle (state=true) or passable (state=false)"""
 
@@ -303,10 +304,41 @@ class PathManager(AppComponent):
             state
         )
 
+        # cache immediately if specified
+        if cache_immediate:
+            self.cache_obstacles()
+
         # dispatch obstacle setting complete
         EventDispatcher.instance().trigger_event(
             event_definitions.RADIAL_OBSTACLE_SET_COMPLETE,
             self.terrain_model.obstacles
+        )
+
+    def set_obstacle_list(self, coordinate_list, coordinate_system, state, cache_immediate=False):
+        """Mark coordinates specified in list as either
+        an obstacle (state=true) or passable (state=false)"""
+
+        # clear cached obstacles
+        self.path_finder.clear_obstacles()
+
+        # go through all coordinates in list
+        geo_point_list = []
+        for coordinates in coordinate_list:
+            geo_point = self.create_geo_point_from_coordinates(coordinates, coordinate_system)
+            geo_point_list.append(geo_point)
+
+        # set the obstacles at specified coordinates
+        self.terrain_model.set_obstacle_list(geo_point_list, state)
+
+        # cache immediately if specified
+        if cache_immediate:
+            self.cache_obstacles()
+
+        # dispatch obstacle setting complete
+        EventDispatcher.instance().trigger_event(
+            event_definitions.OBSTACLE_LIST_SET_COMPLETE,
+            geo_point_list,
+            state
         )
 
     def find_path(self):

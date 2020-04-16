@@ -182,6 +182,7 @@ class PageFindPath(PageBase):
             event_definitions.START_POINT_SET_COMPLETE: self.on_start_point_set,
             event_definitions.END_POINT_SET_COMPLETE: self.on_end_point_set,
             event_definitions.RADIAL_OBSTACLE_SET_COMPLETE: self.on_obstacles_changed,
+            event_definitions.OBSTACLE_LIST_SET_COMPLETE: self.on_obstacles_changed,
             event_definitions.COSTS_CACHING_COMPLETE: self.on_costs_caching_complete,
             event_definitions.OBSTACLES_CACHING_COMPLETE: self.refresh_ui,
             event_definitions.HEURISTICS_CACHING_COMPLETE: self.refresh_ui,
@@ -424,7 +425,7 @@ class PageFindPath(PageBase):
         # head back to ready state
         self.state = PageFindPath.STATE_READY
 
-    def on_obstacles_changed(self, obstacles):
+    def on_obstacles_changed(self, *args, **kwargs):
 
         # update obstacle image
         self.obstacle_img.set_data(self.path_manager.terrain_model.obstacle_mask())
@@ -433,7 +434,11 @@ class PageFindPath(PageBase):
         self.found_path_line.set_data([], [])
 
         # re-cached blitted texture (to include the new obstacle)
-        self.re_cache_blitted_texture()
+        if self.blitting_active:
+            self.re_cache_blitted_texture()
+
+        # redraw
+        self.redraw_canvas()
 
     def on_costs_caching_complete(self):
 

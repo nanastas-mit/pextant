@@ -122,16 +122,16 @@ class EndPointSet(BaseMessage):
         super().__init__()
 
 # obstacle setting
-class RadialObstacleSetRequest(BaseMessage):
-    def __init__(self, coordinates, radius, state):
-        self.coordinates = coordinates
-        self.radius = radius
+class ObstacleListSetRequest(BaseMessage):
+    def __init__(self, coordinate_list, state):
+        self.coordinate_list = coordinate_list
         self.state = state
         super().__init__()
 
-class ObstaclesChanged(BaseMessage):
-    def __init__(self, obstacles):
-        self.obstacles = obstacles
+class ObstacleListSet(BaseMessage):
+    def __init__(self, coordinate_list, state):
+        self.coordinate_list = coordinate_list
+        self.state = state
         super().__init__()
 
 # path finding
@@ -174,8 +174,8 @@ message_identifiers = {
     EndPointSet: next(_message_identifier_count),
 
     # obstacles
-    RadialObstacleSetRequest: next(_message_identifier_count),
-    ObstaclesChanged: next(_message_identifier_count),
+    ObstacleListSetRequest: next(_message_identifier_count),
+    ObstacleListSet: next(_message_identifier_count),
 
     # path
     PathFindRequest: next(_message_identifier_count),
