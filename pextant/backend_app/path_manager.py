@@ -1,3 +1,4 @@
+import numpy as np
 import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.utils as utils
 from os import path
@@ -74,6 +75,10 @@ class PathManager(AppComponent):
             event_definitions.PATH_FIND_REQUESTED,
             self.create_threaded_switch(self.find_path)
         )
+        event_dispatcher.register_listener(
+            event_definitions.PATH_FIND_FROM_POSITION_REQUESTED,
+            self.create_threaded_switch(self.find_path_from_position)
+        )
 
         # path variables
         self.path_finder = PathFinder()
@@ -120,7 +125,7 @@ class PathManager(AppComponent):
         start_coordinates = scenario['start']
         end_coordinates = scenario['end']
         coordinate_system = scenario['coordinate_system']
-        initial_heading = scenario['initial_heading']
+        start_heading = scenario['start_heading']
 
         # model
         self.load_model(model, max_slope, False)
@@ -138,7 +143,7 @@ class PathManager(AppComponent):
             self.terrain_model,
             self.start_point,
             self.end_point,
-            initial_heading
+            start_heading
         )
 
     '''=======================================
@@ -293,6 +298,11 @@ class PathManager(AppComponent):
         # clear cached obstacles
         self.path_finder.clear_obstacles()
 
+        # store original obstacles
+        original_obstacles = self.terrain_model.obstacles.astype(int)
+        if isinstance(original_obstacles, np.ma.core.MaskedArray):
+            original_obstacles = original_obstacles.filled(0)
+
         # convert to appropriate coordinates
         geo_point = self.create_geo_point_from_coordinates(coordinates, coordinate_system)
         elt = self.terrain_model.getMeshElement(geo_point)
@@ -308,36 +318,55 @@ class PathManager(AppComponent):
         if cache_immediate:
             self.cache_obstacles()
 
-        # dispatch obstacle setting complete
+        # get new obstacles
+        new_obstacles = self.terrain_model.obstacles.astype(int)
+        if isinstance(original_obstacles, np.ma.core.MaskedArray):
+            new_obstacles = original_obstacles.filled(0)
+
+        # create list of changed points
+        row_col_coordinates_list = []
+        changed_obstacles = new_obstacles - original_obstacles
+        num_rows = changed_obstacles.shape[0]
+        num_cols = changed_obstacles.shape[1]
+        for row in range(0, num_rows):
+            for col in range(0, num_cols):
+                if changed_obstacles[row, col] != 0:
+                    row_col_coordinates_list.append([row, col])
+
+        # dispatch obstacle change complete
         EventDispatcher.instance().trigger_event(
-            event_definitions.RADIAL_OBSTACLE_SET_COMPLETE,
-            self.terrain_model.obstacles
+            event_definitions.OBSTACLE_CHANGE_COMPLETE,
+            row_col_coordinates_list,
+            state
         )
 
-    def set_obstacle_list(self, coordinate_list, coordinate_system, state, cache_immediate=False):
+    def set_obstacle_list(self, coordinates_list, coordinate_system, state, cache_immediate=False):
         """Mark coordinates specified in list as either
         an obstacle (state=true) or passable (state=false)"""
 
         # clear cached obstacles
         self.path_finder.clear_obstacles()
 
-        # go through all coordinates in list
+        # go through all coordinates in list, create geo_point list
         geo_point_list = []
-        for coordinates in coordinate_list:
+        for coordinates in coordinates_list:
             geo_point = self.create_geo_point_from_coordinates(coordinates, coordinate_system)
             geo_point_list.append(geo_point)
 
-        # set the obstacles at specified coordinates
+        # set the obstacles at specified points
         self.terrain_model.set_obstacle_list(geo_point_list, state)
 
         # cache immediately if specified
         if cache_immediate:
             self.cache_obstacles()
 
+        # convert list to [row, col] coordinates
+        row_col_coordinates_list = [geo_point.to(self.terrain_model.ROW_COL).tolist() for geo_point in geo_point_list]
+
         # dispatch obstacle setting complete
         EventDispatcher.instance().trigger_event(
-            event_definitions.OBSTACLE_LIST_SET_COMPLETE,
-            geo_point_list,
+            event_definitions.OBSTACLE_CHANGE_COMPLETE,
+            row_col_coordinates_list,
             state
         )
 
@@ -358,6 +387,14 @@ class PathManager(AppComponent):
 
         # dispatch path found event
         EventDispatcher.instance().trigger_event(event_definitions.PATH_FIND_COMPLETE, found_path)
+
+    def find_path_from_position(self, coordinates, coordinate_system):
+
+        # set new start
+        self.set_start_point(coordinates, coordinate_system)
+
+        # find path
+        self.find_path()
 
     '''=======================================
     HELPERS

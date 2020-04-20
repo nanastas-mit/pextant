@@ -122,21 +122,26 @@ class EndPointSet(BaseMessage):
         super().__init__()
 
 # obstacle setting
-class ObstacleListSetRequest(BaseMessage):
-    def __init__(self, coordinate_list, state):
-        self.coordinate_list = coordinate_list
+class ObstaclesListSetRequest(BaseMessage):
+    def __init__(self, coordinates_list, state):
+        self.coordinates_list = coordinates_list
         self.state = state
         super().__init__()
 
-class ObstacleListSet(BaseMessage):
-    def __init__(self, coordinate_list, state):
-        self.coordinate_list = coordinate_list
+class ObstaclesChanged(BaseMessage):
+    def __init__(self, coordinates_list, state):
+        self.coordinates_list = coordinates_list
         self.state = state
         super().__init__()
 
 # path finding
 class PathFindRequest(BaseMessage):
     def __init__(self):
+        super().__init__()
+
+class PathFindFromPositionRequest(BaseMessage):
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
         super().__init__()
 
 class PathFound(BaseMessage):
@@ -174,11 +179,12 @@ message_identifiers = {
     EndPointSet: next(_message_identifier_count),
 
     # obstacles
-    ObstacleListSetRequest: next(_message_identifier_count),
-    ObstacleListSet: next(_message_identifier_count),
+    ObstaclesListSetRequest: next(_message_identifier_count),
+    ObstaclesChanged: next(_message_identifier_count),
 
     # path
     PathFindRequest: next(_message_identifier_count),
+    PathFindFromPositionRequest: next(_message_identifier_count),
     PathFound: next(_message_identifier_count),
 }
 

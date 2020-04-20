@@ -4,5 +4,5 @@
   "start": [530, 868],
   "end": [714, 1026],
   "coordinate_system": "coord",
-  "initial_heading": 180.0
+  "start_heading": 180.0
 }

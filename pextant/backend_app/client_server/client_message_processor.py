@@ -39,8 +39,8 @@ class ClientMessageProcessor(AppComponent):
         event_dispatcher.register_listener(event_definitions.START_POINT_SET_COMPLETE, self.on_start_point_set)
         event_dispatcher.register_listener(event_definitions.END_POINT_SET_COMPLETE, self.on_end_point_set)
         event_dispatcher.register_listener(
-            event_definitions.OBSTACLE_LIST_SET_COMPLETE,
-            self.on_obstacle_list_set
+            event_definitions.OBSTACLE_CHANGE_COMPLETE,
+            self.on_obstacles_changed
         )
         event_dispatcher.register_listener(event_definitions.PATH_FIND_COMPLETE, self.on_path_found)
 
@@ -97,10 +97,10 @@ class ClientMessageProcessor(AppComponent):
                     Cartesian.SYSTEM_NAME
                 )
             # obstacle set request
-            elif msg.identifier() == message_definitions.ObstacleListSetRequest.identifier():
+            elif msg.identifier() == message_definitions.ObstaclesListSetRequest.identifier():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.OBSTACLE_LIST_SET_REQUESTED,
-                    msg.coordinate_list,
+                    msg.coordinates_list,
                     Cartesian.SYSTEM_NAME,
                     msg.state,
                     True
@@ -109,6 +109,13 @@ class ClientMessageProcessor(AppComponent):
             elif msg.identifier() == message_definitions.PathFindRequest.identifier():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.PATH_FIND_REQUESTED
+                )
+            # find from position request
+            elif msg.identifier() == message_definitions.PathFindFromPositionRequest.identifier():
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.PATH_FIND_FROM_POSITION_REQUESTED,
+                    msg.coordinates,
+                    Cartesian.SYSTEM_NAME
                 )
 
     def on_send_message_requested(self, msg):
@@ -192,16 +199,10 @@ class ClientMessageProcessor(AppComponent):
         # send
         self.send_message(msg)
 
-    def on_obstacle_list_set(self, geo_point_list, state):
-
-        # create list of [row, col] coordinates
-        coordinate_list = []
-        for geo_point in geo_point_list:
-            coordinate = geo_point.to(self.path_manager.terrain_model.ROW_COL).tolist()
-            coordinate_list.append(coordinate)
+    def on_obstacles_changed(self, coordinates_list, state):
 
         # create message content
-        msg = message_definitions.ObstacleListSet(coordinate_list, state)
+        msg = message_definitions.ObstaclesChanged(coordinates_list, state)
 
         # send
         self.send_message(msg)
