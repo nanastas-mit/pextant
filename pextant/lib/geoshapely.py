@@ -106,7 +106,7 @@ class XY(GeoType):
         return Cartesian(self.origin, self.resolution, not self.reversed)
 
     def to_utm(self, geo_point):
-        return  UTM(self.zone)
+        return UTM(self.zone)
 
     def getargs(self, geo_points):
         # next line should ideally be super.getargs, but we overwrite the fx so not sure if possible
