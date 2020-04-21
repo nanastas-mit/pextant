@@ -429,7 +429,7 @@ class PathManager(AppComponent):
         elif coordinate_system == Cartesian.SYSTEM_NAME:
             geo_point = GeoPoint(self.terrain_model.ROW_COL, coordinates[0], coordinates[1])
         else:  # assume UTM (coordinate_system == UTM.SYSTEM_NAME)
-            geo_point = GeoPoint(self.terrain_model.utm_reference, coordinates[0], coordinates[1])
+            geo_point = GeoPoint(self.terrain_model.UTM_REF, coordinates[0], coordinates[1])
 
         return geo_point
 

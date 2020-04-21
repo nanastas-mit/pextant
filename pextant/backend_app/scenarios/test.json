@@ -1,8 +1,8 @@
 {
   "model": "maze2.png",
   "max_slope": 10,
-  "start": [1, 0],
-  "end": [10, 8],
   "coordinate_system": "coord",
-  "start_heading": 90.0
+  "start": [2, 6],
+  "start_heading": 90.0,
+  "end": [10, 8]
 }

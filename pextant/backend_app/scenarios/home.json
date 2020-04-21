@@ -3,6 +3,6 @@
   "max_slope": 5,
   "coordinate_system": "utm",
   "start": [326350.16, 4694192.98],
-  "start_heading": 138.1585
-  "end": [326190.00, 4694109.40],
+  "start_heading": 138.1585,
+  "end": [326190.00, 4694109.40]
 }
