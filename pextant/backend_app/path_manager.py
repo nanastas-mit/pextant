@@ -21,6 +21,7 @@ class PathManager(AppComponent):
     # consts
     SCENARIOS_DIRECTORY = 'scenarios'
     MODELS_DIRECTORY = 'models'
+    OBSTACLES_DIRECTORY = 'obstacles'
 
     # properties
     @property
@@ -114,21 +115,28 @@ class PathManager(AppComponent):
 
         # read in the scenario file
         local_path_file_name = path.join(PathManager.SCENARIOS_DIRECTORY, scenario_to_load)
-        in_file = open(local_path_file_name, 'rb')
-        json_bytes = in_file.read()
-        in_file.close()
+        with open(local_path_file_name, 'rb') as in_file:
+            json_bytes = in_file.read()
 
         # decode json
-        scenario = utils.json_decode(json_bytes)
-        model = scenario['model']
+        scenario: dict = utils.json_decode(json_bytes)
+        model_file = scenario['model']
         max_slope = scenario['max_slope']
         start_coordinates = scenario['start']
         end_coordinates = scenario['end']
         coordinate_system = scenario['coordinate_system']
         start_heading = scenario['start_heading']
+        obstacles_file = scenario.get('obstacles', None)
 
         # model
-        self.load_model(model, max_slope, False)
+        self.load_model(model_file, max_slope, False)
+        # obstacles
+        if obstacles_file:
+            local_path_file_name = path.join(PathManager.OBSTACLES_DIRECTORY, obstacles_file)
+            with open(local_path_file_name, 'rb') as in_file:
+                json_bytes = in_file.read()
+            json_object = utils.json_decode(json_bytes)
+            self.terrain_model.set_obstacles(json_object['obstacles'])
         # endpoint setting
         self.set_start_point(start_coordinates, coordinate_system, False)
         self.set_end_point(end_coordinates, coordinate_system, False)
@@ -324,14 +332,8 @@ class PathManager(AppComponent):
             new_obstacles = original_obstacles.filled(0)
 
         # create list of changed points
-        row_col_coordinates_list = []
         changed_obstacles = new_obstacles - original_obstacles
-        num_rows = changed_obstacles.shape[0]
-        num_cols = changed_obstacles.shape[1]
-        for row in range(0, num_rows):
-            for col in range(0, num_cols):
-                if changed_obstacles[row, col] != 0:
-                    row_col_coordinates_list.append([row, col])
+        row_col_coordinates_list = changed_obstacles.nonzero()
 
         # dispatch obstacle change complete
         EventDispatcher.instance().trigger_event(

@@ -216,6 +216,14 @@ class GridMeshModel(EnvironmentalModel):
         self.obstacles = self.slopes > maxSlope
         self.passable = np.logical_not(self.obstacles)
 
+    def set_obstacles(self, obstacles):
+        if isinstance(self.obstacles, np.ma.core.MaskedArray):
+            self.obstacles = np.ma.core.MaskedArray(obstacles)
+        elif isinstance(self.obstacles, np.ndarray):
+            self.obstacles = np.array(obstacles)
+        else:
+            self.obstacles = obstacles
+
     def _isPassable(self, mesh_coordinates):
         valid_data = self._hasdata(mesh_coordinates)
         row, col = valid_data.transpose()

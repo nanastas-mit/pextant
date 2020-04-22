@@ -1,5 +1,7 @@
+import os
 import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.ui.fonts as fonts
+import pextant.backend_app.utils as utils
 import tkinter as tk
 import tkinter.ttk as ttk
 from matplotlib.axes import Axes
@@ -14,10 +16,10 @@ from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.lib.geoshapely import Cartesian, GeoPoint
 from pextant.backend_app.path_manager import PathManager
 from pextant.backend_app.ui.page_base import PageBase
+from tkinter.filedialog import FileDialog
 
 
 class BannerCell:
-
     COMMAND_PREFIX = ""
     COMMAND_POSTFIX = "_command"
     SETUP_PREFIX = "setup_"
@@ -62,7 +64,8 @@ class BannerCell:
 
         # if there is a default command function, add a default button
         if self._parent_command_func:
-            self.widgets["default_btn"] = tk.Button(cell_frame, text=default_btn_text, command=self._parent_command_func)
+            self.widgets["default_btn"] = tk.Button(cell_frame, text=default_btn_text,
+                                                    command=self._parent_command_func)
             self.widgets["default_btn"].pack(padx=BannerCell.PAD_X, pady=BannerCell.PAD_Y, side=tk.TOP)
 
         # do any custom setup
@@ -126,7 +129,8 @@ class PageFindPath(PageBase):
             'end_btn_text': 'Set End'
         },
         'set_obstacle': {
-            'title': 'Set Obstacle'
+            'title': 'Set Obstacle',
+            'save_btn_title': 'Save Current'
         },
         'find_path': {
             'title': 'Find Path',
@@ -138,6 +142,7 @@ class PageFindPath(PageBase):
     @property
     def state(self):
         return self._state
+
     @state.setter
     def state(self, new_state):
 
@@ -159,6 +164,7 @@ class PageFindPath(PageBase):
     @property
     def obstacle_radius(self):
         return self._obstacle_radius
+
     @obstacle_radius.setter
     def obstacle_radius(self, new_radius):
 
@@ -166,13 +172,13 @@ class PageFindPath(PageBase):
 
         # if ui has been initialized
         if self.ui_initialized:
-
             # update radius
             self.pending_obstacle_artist.radius = self._obstacle_radius
 
     '''=======================================
     STARTUP/SHUTDOWN
     ======================================='''
+
     def __init__(self, master):
 
         super().__init__(master, {
@@ -290,6 +296,7 @@ class PageFindPath(PageBase):
     '''=======================================
     UI EVENT HANDLERS
     ======================================='''
+
     def on_click(self, event: MouseEvent):
 
         # IF:
@@ -330,7 +337,6 @@ class PageFindPath(PageBase):
 
             # if setting obstacle
             if self.state == PageFindPath.STATE_SETTING_OBSTACLE:
-
                 # issue obstacle set request
                 EventDispatcher.instance().trigger_event(
                     event_definitions.RADIAL_OBSTACLE_SET_REQUESTED,
@@ -344,7 +350,6 @@ class PageFindPath(PageBase):
 
         # if setting new obstacles
         if self.state == PageFindPath.STATE_SETTING_OBSTACLE:
-
             # draw the obstacle marker
             self.pending_obstacle_artist.center = (event.xdata, event.ydata)
             self.redraw_canvas()
@@ -353,13 +358,13 @@ class PageFindPath(PageBase):
 
         # if we're blitting
         if self.blitting_active:
-
             # re-cache the blitted bits
             self.re_cache_blitted_texture()
 
     '''=======================================
     APP EVENT HANDLERS
     ======================================='''
+
     def on_scenario_loaded(self, terrain_model, start_point, end_point, initial_heading):
 
         self.on_model_loaded(terrain_model)
@@ -458,6 +463,7 @@ class PageFindPath(PageBase):
     '''=======================================
     CELL FUNCTIONS
     ======================================='''
+
     # load scenario
     def setup_load_scenario_cell(self, cell: BannerCell, cell_frame, cell_data):
 
@@ -465,24 +471,26 @@ class PageFindPath(PageBase):
         scenario_files = PathManager.get_available_scenarios()
 
         # scenario dropdown
+        def update_values():
+            scenario_dropdown['values'] = PathManager.get_available_scenarios()
+        def on_scenario_selected(e):
+            self.scenario_to_load = str(scenario_dropdown.get())
         scenario_dropdown = ttk.Combobox(
             cell_frame,
             width=12,
             state="readonly",
-            values=scenario_files
+            values=scenario_files,
+            postcommand=update_values
         )
-        def scenario_dropdown_callback(e):
-            self.scenario_to_load = str(scenario_dropdown.get())
-        scenario_dropdown.bind("<<ComboboxSelected>>", scenario_dropdown_callback)
+        scenario_dropdown.bind("<<ComboboxSelected>>", on_scenario_selected)
         scenario_dropdown.current(0)
-        scenario_dropdown_callback(None)  # simulate a select of 'current'
+        on_scenario_selected(None)  # simulate a select of 'current'
         scenario_dropdown.pack(padx=4, pady=4, side=tk.TOP)
 
     def load_scenario_command(self):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
-
             # note that we're loading
             self.state = PageFindPath.STATE_LOADING_SCENARIO
 
@@ -501,7 +509,6 @@ class PageFindPath(PageBase):
 
         # READY
         if self.state == PageFindPath.STATE_READY:
-
             # enable / disable buttons based on existence of parameters
             btn['state'] = tk.NORMAL
 
@@ -512,14 +519,17 @@ class PageFindPath(PageBase):
         model_files = PathManager.get_available_models()
 
         # add model dropdown
+        def update_values():
+            model_dropdown['values'] = PathManager.get_available_models()
+        def model_dropdown_callback(e):
+            self.model_to_load = str(model_dropdown.get())
         model_dropdown = ttk.Combobox(
             cell_frame,
             width=12,
             state="readonly",
-            values=model_files
+            values=model_files,
+            postcommand=update_values
         )
-        def model_dropdown_callback(e):
-            self.model_to_load = str(model_dropdown.get())
         model_dropdown.bind("<<ComboboxSelected>>", model_dropdown_callback)
         model_dropdown.current(0)
         model_dropdown_callback(None)  # simulate a select of 'current'
@@ -528,6 +538,7 @@ class PageFindPath(PageBase):
         # add slope slider
         def slider_command(value):
             self.max_slope = int(value)
+
         slope_slider = tk.Scale(
             cell_frame,
             from_=0,
@@ -573,7 +584,6 @@ class PageFindPath(PageBase):
 
         # READY
         if self.state == PageFindPath.STATE_READY:
-
             # enable / disable buttons based on existence of parameters
             btn['state'] = tk.NORMAL
 
@@ -603,7 +613,6 @@ class PageFindPath(PageBase):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
-
             # note that we've started caching
             self.state = PageFindPath.STATE_CACHING_COSTS
 
@@ -614,7 +623,6 @@ class PageFindPath(PageBase):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
-
             # issue obstacles caching request
             EventDispatcher.instance().trigger_event(event_definitions.OBSTACLES_CACHING_REQUESTED)
 
@@ -622,7 +630,6 @@ class PageFindPath(PageBase):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
-
             # issue heuristic caching request
             EventDispatcher.instance().trigger_event(event_definitions.HEURISTICS_CACHING_REQUESTED)
 
@@ -738,6 +745,7 @@ class PageFindPath(PageBase):
         # add radius slider
         def slider_command(value):
             self.obstacle_radius = float(value)
+
         radius_slider = tk.Scale(
             cell_frame,
             from_=0.5,
@@ -748,7 +756,16 @@ class PageFindPath(PageBase):
         )
         cell.widgets["radius_slider"] = radius_slider
         radius_slider.set(self.obstacle_radius)
-        radius_slider.pack(padx=4, pady=4, side=tk.TOP)
+        radius_slider.pack(padx=0, pady=0, side=tk.TOP)
+
+        # add save obstacles button
+        save_btn = tk.Button(
+            cell_frame,
+            text=cell_data['save_btn_title'],
+            command=self.save_obstacles_command
+        )
+        cell.widgets["save_btn"] = save_btn
+        save_btn.pack(padx=4, pady=4, side=tk.TOP)
 
     def set_obstacle_command(self):
 
@@ -777,13 +794,39 @@ class PageFindPath(PageBase):
             self.pending_obstacle_artist.set_alpha(0.0)
             self.redraw_canvas()
 
+    def save_obstacles_command(self):
+
+        # get 2D list of current obstacles
+        current_obstacles = self.path_manager.terrain_model.obstacles.tolist()
+
+        # encode as json
+        json_object = {
+            'obstacles': current_obstacles
+        }
+        json_bytes = utils.json_encode(json_object)
+
+        # open dialog for saving file
+        cwd = os.getcwd()
+        obstacles_dir = os.path.join(cwd, PathManager.OBSTACLES_DIRECTORY)
+        with tk.filedialog.asksaveasfile(
+                mode="wb",
+                title='Save Obstacles',
+                initialdir=obstacles_dir,
+                filetypes=[('JSON', '*.json')],
+                defaultextension='json'
+        ) as in_file:
+            # write the json to the file
+            in_file.write(json_bytes)
+
     def refresh_set_obstacle_cell(self, cell: BannerCell):
 
         btn = cell.widgets["default_btn"]
+        save_btn = cell.widgets["save_btn"]
 
         # standard configuration
         btn['state'] = tk.DISABLED
         btn['text'] = "Set Obstacle"
+        save_btn['state'] = tk.DISABLED
 
         if self.state == PageFindPath.STATE_SETTING_OBSTACLE:
             btn['state'] = tk.NORMAL
@@ -791,16 +834,15 @@ class PageFindPath(PageBase):
 
         # READY
         if self.state == PageFindPath.STATE_READY:
-
             # enable / disable buttons based on existence of parameters
             btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
+            save_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
 
     # find path
     def find_path_command(self):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
-
             # note that we've started the path-finding
             self.state = PageFindPath.STATE_FINDING_PATH
 
@@ -827,6 +869,7 @@ class PageFindPath(PageBase):
     '''=======================================
     DRAWING
     ======================================='''
+
     def begin_blitting(self, artists_to_full_redraw):
         self.blitted_texture = self.canvas.copy_from_bbox(self.sub_plot.bbox)
         self.non_cached_artists = artists_to_full_redraw
@@ -876,6 +919,7 @@ class PageFindPath(PageBase):
     '''=======================================
     HELPERS
     ======================================='''
+
     def refresh_ui(self):
         # state property will go through UI elements and refresh them
         self.state = self.state
