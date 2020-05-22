@@ -34,7 +34,7 @@ def create_message(action, value):
     content_bytes = _json_encode(msg.content, content_encoding)
 
     jsonheader = {
-        message_definitions.MESSAGE_IDENTIFIER_KEY: msg.identifier(),
+        message_definitions.MESSAGE_TYPE_KEY: msg.message_type(),
         message_definitions.CONTENT_ENCODING_KEY: content_encoding,
         message_definitions.BYTE_ORDER_KEY: sys.byteorder,
         message_definitions.CONTENT_LENGTH_KEY: len(content_bytes),

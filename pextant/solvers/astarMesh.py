@@ -308,15 +308,20 @@ class astarSolver(SEXTANTSolver):
         # check that we have data at both start and end
         if self.env_model.elt_hasdata(startpoint) and self.env_model.elt_hasdata(endpoint):
 
-            # prepare heuristic function
-            self.cost_function.setEndNode(MeshSearchElement(self.env_model.getMeshElement(endpoint)))
+            # create pathfinder
+            path_finder = pextant_cpp.PathFinder()
+
+            # cache data
+            cached_costs = self.cost_function.create_costs_cache()
+            cost_map = cached_costs["energy"].tolist()
+            path_finder.cache_costs(cost_map)
+            obstacle_map = self.env_model.obstacles.astype(int).tolist()
+            path_finder.cache_obstacles(obstacle_map)
+            heuristics_map = self.cost_function.create_heuristic_cache(target).tolist()
+            path_finder.cache_heuristics(heuristics_map)
 
             # perform search
-            raw = pextant_cpp.astar_solve(
-                source, target,
-                lambda a: self.cost_function.getHeuristicCostRaw(a),
-                self.G.n
-            )
+            raw = path_finder.astar_solve(source, target)
 
             # if we have a good result
             if len(raw) > 0:

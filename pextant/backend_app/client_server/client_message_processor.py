@@ -35,6 +35,10 @@ class ClientMessageProcessor(AppComponent):
         event_dispatcher.register_listener(event_definitions.MESSAGE_RECEIVED, self.on_message_received)
         # path finding
         event_dispatcher.register_listener(event_definitions.SCENARIO_LOAD_COMPLETE, self.on_scenario_loaded)
+        event_dispatcher.register_listener(
+            event_definitions.SCENARIO_LOAD_ENDPOINTS_COMPLETE,
+            self.on_scenario_endpoints_loaded
+        )
         event_dispatcher.register_listener(event_definitions.MODEL_LOAD_COMPLETE, self.on_model_loaded)
         event_dispatcher.register_listener(event_definitions.START_POINT_SET_COMPLETE, self.on_start_point_set)
         event_dispatcher.register_listener(event_definitions.END_POINT_SET_COMPLETE, self.on_end_point_set)
@@ -49,7 +53,7 @@ class ClientMessageProcessor(AppComponent):
     ======================================='''
     def send_message(self, msg):
 
-        print(f"sending '{type(msg).__name__}' message (id={msg.identifier()})")
+        print(f"sending '{type(msg).__name__}' message (id={msg.message_type()})")
 
         # send
         self.server.send_message_to_all_clients(msg)
@@ -57,47 +61,53 @@ class ClientMessageProcessor(AppComponent):
     def on_message_received(self, socket, msg):
 
         print(f"message received from {socket}:\n"
-              f"  ID: {msg.identifier()} ({msg.__class__.__name__})\n"
+              f"  ID: {msg.message_type()} ({msg.__class__.__name__})\n"
               f"  content: {msg.content}")
 
         # send available models/scenarios response immediately
-        if msg.identifier() == message_definitions.AvailableModelRequest.identifier():
+        if msg.message_type() == message_definitions.AvailableModelRequest.message_type():
             self.send_available_models_message()
-        elif msg.identifier() == message_definitions.AvailableScenarioRequest.identifier():
+        elif msg.message_type() == message_definitions.AvailableScenarioRequest.message_type():
             self.send_available_scenarios_message()
 
         # otherwise, transform into relevant event
         else:
 
             # scenario load request
-            if msg.identifier() == message_definitions.ScenarioLoadRequest.identifier():
+            if msg.message_type() == message_definitions.ScenarioLoadRequest.message_type():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.SCENARIO_LOAD_REQUESTED,
                     msg.scenario_to_load
                 )
+            # scenario load request
+            elif msg.message_type() == message_definitions.ScenarioLoadEndpointsRequest.message_type():
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.SCENARIO_LOAD_ENDPOINTS_REQUESTED,
+                    msg.scenario_to_load
+                )
             # model load request
-            elif msg.identifier() == message_definitions.ModelLoadRequest.identifier():
+            elif msg.message_type() == message_definitions.ModelLoadRequest.message_type():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.MODEL_LOAD_REQUESTED,
                     msg.model_to_load,
                     msg.max_slope
                 )
             # start point set request
-            elif msg.identifier() == message_definitions.StartPointSetRequest.identifier():
+            elif msg.message_type() == message_definitions.StartPointSetRequest.message_type():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.START_POINT_SET_REQUESTED,
                     msg.coordinates,
                     Cartesian.SYSTEM_NAME
                 )
             # end point set request
-            elif msg.identifier() == message_definitions.EndPointSetRequest.identifier():
+            elif msg.message_type() == message_definitions.EndPointSetRequest.message_type():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.END_POINT_SET_REQUESTED,
                     msg.coordinates,
                     Cartesian.SYSTEM_NAME
                 )
             # obstacle set request
-            elif msg.identifier() == message_definitions.ObstaclesListSetRequest.identifier():
+            elif msg.message_type() == message_definitions.ObstaclesListSetRequest.message_type():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.OBSTACLE_LIST_SET_REQUESTED,
                     msg.coordinates_list,
@@ -106,12 +116,12 @@ class ClientMessageProcessor(AppComponent):
                     True
                 )
             # path find request
-            elif msg.identifier() == message_definitions.PathFindRequest.identifier():
+            elif msg.message_type() == message_definitions.PathFindRequest.message_type():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.PATH_FIND_REQUESTED
                 )
             # find from position request
-            elif msg.identifier() == message_definitions.PathFindFromPositionRequest.identifier():
+            elif msg.message_type() == message_definitions.PathFindFromPositionRequest.message_type():
                 EventDispatcher.instance().trigger_event(
                     event_definitions.PATH_FIND_FROM_POSITION_REQUESTED,
                     msg.coordinates,
@@ -167,6 +177,22 @@ class ClientMessageProcessor(AppComponent):
         # send
         self.send_message(msg)
 
+    def on_scenario_endpoints_loaded(self, start_point, end_point, initial_heading):
+
+        # endpoints
+        start_coordinates = start_point.to(self.path_manager.terrain_model.ROW_COL).tolist()
+        end_coordinates = end_point.to(self.path_manager.terrain_model.ROW_COL).tolist()
+
+        # create message content
+        msg = message_definitions.ScenarioEndpointsLoaded(
+            start_coordinates,
+            initial_heading,
+            end_coordinates
+        )
+
+        # send
+        self.send_message(msg)
+
     def on_model_loaded(self, terrain_model):
 
         # create message content
@@ -207,12 +233,12 @@ class ClientMessageProcessor(AppComponent):
         # send
         self.send_message(msg)
 
-    def on_path_found(self, path):
+    def on_path_found(self, path, distance_cost, energy_cost):
 
         # create message content
         numpy_list = np.array(path)
         path = numpy_list.astype(int).tolist()  # argument 'path' is list of numpy ints - which json decoder fails with
-        msg = message_definitions.PathFound(path)
+        msg = message_definitions.PathFound(path, distance_cost, energy_cost)
 
         # send
         self.send_message(msg)

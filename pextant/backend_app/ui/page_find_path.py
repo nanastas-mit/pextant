@@ -153,9 +153,9 @@ class PageFindPath(PageBase):
 
             self.notification_lbl['text'] = PageFindPath.NOTIFICATION_LBL_TEXT.get(self._state, "Doing Something...")
 
-            # refresh all buttons based on new state
-            for btn in self.banner_cells:
-                btn.refresh()
+            # refresh all cells based on new state
+            for cell in self.banner_cells:
+                cell.refresh()
 
     @property
     def blitting_active(self):
@@ -449,7 +449,7 @@ class PageFindPath(PageBase):
         # ready for the next thing
         self.state = PageFindPath.STATE_READY
 
-    def on_path_found(self, path):
+    def on_path_found(self, path, distance_cost, energy_cost):
 
         # update line data
         xs = [node[1] for node in path]
@@ -675,9 +675,17 @@ class PageFindPath(PageBase):
         cell.widgets["start_btn"] = tk.Button(cell_frame, text=start_btn_text, command=self.set_start_command)
         cell.widgets["start_btn"].pack(padx=BannerCell.PAD_X, pady=BannerCell.PAD_Y, side=tk.TOP)
 
+        # start coords label
+        cell.widgets["start_label"] = tk.Label(cell_frame, text="[-,-]")
+        cell.widgets["start_label"].pack(padx=BannerCell.PAD_X, pady=0, side=tk.TOP)
+
         # end button
         cell.widgets["end_btn"] = tk.Button(cell_frame, text=end_btn_text, command=self.set_end_command)
         cell.widgets["end_btn"].pack(padx=BannerCell.PAD_X, pady=BannerCell.PAD_Y, side=tk.TOP)
+
+        # end coords label
+        cell.widgets["end_label"] = tk.Label(cell_frame, text="[-,-]")
+        cell.widgets["end_label"].pack(padx=BannerCell.PAD_X, pady=0, side=tk.TOP)
 
     def set_start_command(self):
 
@@ -710,7 +718,9 @@ class PageFindPath(PageBase):
     def refresh_set_endpoints_cell(self, cell: BannerCell):
 
         start_btn = cell.widgets["start_btn"]
+        start_label = cell.widgets["start_label"]
         end_btn = cell.widgets["end_btn"]
+        end_label = cell.widgets["end_label"]
 
         # standard configuration
         start_btn['state'] = tk.DISABLED
@@ -738,6 +748,20 @@ class PageFindPath(PageBase):
             # enable / disable buttons based on existence of parameters
             start_btn['state'] = tk.NORMAL if self.path_manager.terrain_model else tk.DISABLED
             end_btn['state'] = tk.NORMAL if self.path_manager.terrain_model else tk.DISABLED
+
+        # start label
+        if self.path_manager.start_point:
+            row, column = self.path_manager.start_point.to(self.path_manager.terrain_model.ROW_COL)
+            start_label['text'] = f"[{row},{column}]"
+        else:
+            start_label['text'] = "[-,-]"
+
+        # end label
+        if self.path_manager.end_point:
+            row, column = self.path_manager.end_point.to(self.path_manager.terrain_model.ROW_COL)
+            end_label['text'] = f"[{row},{column}]"
+        else:
+            end_label['text'] = "[-,-]"
 
     # set obstacles
     def setup_set_obstacle_cell(self, cell: BannerCell, cell_frame, cell_data):
@@ -839,10 +863,21 @@ class PageFindPath(PageBase):
             save_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
 
     # find path
+    def setup_find_path_cell(self, cell: BannerCell, cell_frame, cell_data):
+
+        # distance text
+        cell.widgets["distance_label"] = tk.Label(cell_frame, text="Distance: -")
+        cell.widgets["distance_label"].pack(padx=BannerCell.PAD_X, pady=BannerCell.PAD_Y, side=tk.TOP)
+
+        # metabolic cost text
+        cell.widgets["metabolic_label"] = tk.Label(cell_frame, text="Energy: -")
+        cell.widgets["metabolic_label"].pack(padx=BannerCell.PAD_X, pady=BannerCell.PAD_Y, side=tk.TOP)
+
     def find_path_command(self):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
+
             # note that we've started the path-finding
             self.state = PageFindPath.STATE_FINDING_PATH
 
@@ -852,6 +887,8 @@ class PageFindPath(PageBase):
     def refresh_find_path_cell(self, cell: BannerCell):
 
         btn = cell.widgets["default_btn"]
+        distance_label = cell.widgets["distance_label"]
+        metabolic_label = cell.widgets["metabolic_label"]
 
         # standard configuration
         btn['state'] = tk.DISABLED
@@ -865,6 +902,14 @@ class PageFindPath(PageBase):
                 btn['state'] = tk.NORMAL
             else:
                 btn['state'] = tk.DISABLED
+
+        # if a path is found
+        if self.path_manager.found_path:
+            distance_label['text'] = "Distance: {:.1f}m".format(self.path_manager.path_distance)
+            metabolic_label['text'] = "Energy: {:.1f}kJ".format(self.path_manager.path_energy / 1000)
+        else:
+            distance_label['text'] = "Distance: -"
+            metabolic_label['text'] = "Energy: -"
 
     '''=======================================
     DRAWING

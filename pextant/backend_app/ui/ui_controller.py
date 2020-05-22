@@ -21,7 +21,7 @@ class UIController(AppComponent):
         # create and setup root
         self.root = tk.Tk()
         self.root.title("Sextant")
-        self.root.geometry('740x620')
+        self.root.geometry('960x720')
         self.root.protocol("WM_DELETE_WINDOW", self.on_window_closed)
 
         # initialize styles

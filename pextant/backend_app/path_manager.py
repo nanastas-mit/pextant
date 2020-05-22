@@ -5,8 +5,8 @@ from os import path
 from pextant.backend_app.app_component import AppComponent
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.EnvironmentalModel import load_legacy, GDALMesh, load_obstacle_map
-from pextant.explorers import Astronaut
-from pextant.lib.geoshapely import GeoPoint, UTM, LatLon, Cartesian, LAT_LONG
+from pextant.explorers import Astronaut, TraversePath
+from pextant.lib.geoshapely import GeoPoint, GeoPolygon, UTM, LatLon, Cartesian, LAT_LONG
 from pextant.solvers.astarMesh import ExplorerCost
 from pextant_cpp import PathFinder
 from threading import Thread
@@ -58,6 +58,10 @@ class PathManager(AppComponent):
             self.create_threaded_switch(self.load_scenario)
         )
         event_dispatcher.register_listener(
+            event_definitions.SCENARIO_LOAD_ENDPOINTS_REQUESTED,
+            self.load_scenario_endpoints
+        )
+        event_dispatcher.register_listener(
             event_definitions.MODEL_LOAD_REQUESTED,
             self.create_threaded_switch(self.load_model)
         )
@@ -88,6 +92,9 @@ class PathManager(AppComponent):
         self.cost_function = None
         self.start_point = None
         self.end_point = None
+        self.found_path = None
+        self.path_distance = -1
+        self.path_energy = -1
 
     def close(self):
 
@@ -154,6 +161,35 @@ class PathManager(AppComponent):
             start_heading
         )
 
+    def load_scenario_endpoints(self, scenario_to_load):
+        """Loads the endpoints listed in specified scenario."""
+
+        # read in the scenario file
+        local_path_file_name = path.join(PathManager.SCENARIOS_DIRECTORY, scenario_to_load)
+        with open(local_path_file_name, 'rb') as in_file:
+            json_bytes = in_file.read()
+
+        # decode json
+        scenario: dict = utils.json_decode(json_bytes)
+        start_coordinates = scenario['start']
+        end_coordinates = scenario['end']
+        coordinate_system = scenario['coordinate_system']
+        start_heading = scenario['start_heading']
+
+        # endpoint setting
+        self.set_start_point(start_coordinates, coordinate_system, False)
+        self.set_end_point(end_coordinates, coordinate_system, False)
+        # caching
+        self.cache_heuristics(False)
+
+        # all done! dispatch event
+        EventDispatcher.instance().trigger_event(
+            event_definitions.SCENARIO_LOAD_ENDPOINTS_COMPLETE,
+            self.start_point,
+            self.end_point,
+            start_heading
+        )
+
     '''=======================================
     MODELS
     ======================================='''
@@ -173,12 +209,12 @@ class PathManager(AppComponent):
         # load the model
         if extension == '.txt':  # text file is 'legacy'
             grid_mesh = load_legacy(local_path_file_name)
-            self.terrain_model = grid_mesh.loadSubSection(maxSlope=max_slope, cached=False)
+            self.terrain_model = grid_mesh.loadSubSection(maxSlope=max_slope, cached=True)
         elif extension == '.png':  # .png is obstacle 'maze'
             self.terrain_model = load_obstacle_map(local_path_file_name)
         elif extension == '.img' or extension == '.tif':  # .img and .tif are DEMs
             grid_mesh = GDALMesh(local_path_file_name)
-            self.terrain_model = grid_mesh.loadSubSection(maxSlope=max_slope, cached=False)
+            self.terrain_model = grid_mesh.loadSubSection(maxSlope=max_slope, cached=True)
         else:
             print(f"File type {extension} not valid for model loading!")
             return
@@ -186,7 +222,7 @@ class PathManager(AppComponent):
         # load the kernel, cost function
         kernel_list = self.terrain_model.searchKernel.getKernel().tolist()
         self.path_finder.set_kernel(kernel_list)
-        self.cost_function = ExplorerCost(self.agent, self.terrain_model, 'Energy', cached=False)
+        self.cost_function = ExplorerCost(self.agent, self.terrain_model, 'Energy', cached=True)
 
         # dispatch loaded event
         if dispatch_completed_event:
@@ -205,6 +241,11 @@ class PathManager(AppComponent):
 
         # clear out cached data in path finder
         self.path_finder.clear_all()
+
+        # path itself
+        self.found_path = None
+        self.path_distance = -1
+        self.path_energy = -1
 
         # dispatch unloaded event
         EventDispatcher.instance().trigger_event(event_definitions.MODEL_UNLOAD_COMPLETE)
@@ -385,10 +426,26 @@ class PathManager(AppComponent):
         # solve!
         source = self.terrain_model.getMeshElement(self.start_point).mesh_coordinate  # unscaled (row, column)
         target = self.terrain_model.getMeshElement(self.end_point).mesh_coordinate  # unscaled (row, column)
-        found_path = self.path_finder.astar_solve(source, target)
+
+        # save path
+        self.found_path = self.path_finder.astar_solve(source, target)  # list of unscaled (row, column)
+
+        # calculate costs
+        col_row = np.array(self.found_path).transpose()[::-1]  # matrix where 0th row is x's, 1st is y's
+        found_geo_polygon_path = GeoPolygon(self.terrain_model.COL_ROW, *col_row)
+        traverse = TraversePath.frommap(found_geo_polygon_path, self.terrain_model)
+        _, _, incremental_distances = self.agent.path_dl_slopes(traverse)
+        self.path_distance = np.sum(incremental_distances)
+        incremental_energy_usage, _ = self.agent.path_energy_expenditure(traverse)
+        self.path_energy = np.sum(incremental_energy_usage)
 
         # dispatch path found event
-        EventDispatcher.instance().trigger_event(event_definitions.PATH_FIND_COMPLETE, found_path)
+        EventDispatcher.instance().trigger_event(
+            event_definitions.PATH_FIND_COMPLETE,
+            self.found_path,
+            self.path_distance,
+            self.path_energy
+        )
 
     def find_path_from_position(self, coordinates, coordinate_system):
 

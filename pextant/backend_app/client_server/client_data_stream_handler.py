@@ -160,8 +160,8 @@ class ClientDataStreamHandler:
         content = utils.json_decode(serialized_content, encoding)
 
         # transform into message class
-        msg = message_definitions.create_message_from_id(
-            self.jsonheader[message_definitions.MESSAGE_IDENTIFIER_KEY],
+        msg = message_definitions.create_message_from_type(
+            self.jsonheader[message_definitions.MESSAGE_TYPE_KEY],
             **content
         )
 
@@ -209,14 +209,14 @@ class ClientDataStreamHandler:
         content_bytes = utils.json_encode(msg.content, content_encoding)
 
         # serialize the message
-        serialized_message = self._serialize_message(msg.identifier(), content_encoding, content_bytes)
+        serialized_message = self._serialize_message(msg.message_type(), content_encoding, content_bytes)
         self._send_buffer += serialized_message
 
-    def _serialize_message(self, message_identifier, content_encoding, content_bytes):
+    def _serialize_message(self, message_type, content_encoding, content_bytes):
 
         # create header as a python dictionary
         json_header = {
-            message_definitions.MESSAGE_IDENTIFIER_KEY: message_identifier,
+            message_definitions.MESSAGE_TYPE_KEY: message_type,
             message_definitions.CONTENT_ENCODING_KEY: content_encoding,
             message_definitions.BYTE_ORDER_KEY: sys.byteorder,
             message_definitions.CONTENT_LENGTH_KEY: len(content_bytes),

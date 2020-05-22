@@ -8,12 +8,12 @@ HEADER
 PROTO_HEADER_LENGTH = 4  # size of unsigned long
 
 # header
-MESSAGE_IDENTIFIER_KEY = "message_identifier"
+MESSAGE_TYPE_KEY = "message_type"
 CONTENT_ENCODING_KEY = "content_encoding"
 BYTE_ORDER_KEY = "byteorder"
 CONTENT_LENGTH_KEY = "content_length"
 HEADER_REQUIRED_FIELDS = (
-    MESSAGE_IDENTIFIER_KEY,
+    MESSAGE_TYPE_KEY,
     CONTENT_ENCODING_KEY,
     BYTE_ORDER_KEY,
     CONTENT_LENGTH_KEY,
@@ -24,8 +24,8 @@ BASE
 ======================================='''
 class BaseMessage:
     @classmethod
-    def identifier(cls):
-        return message_identifiers[cls]
+    def message_type(cls):
+        return message_types[cls]
 
     def __init__(self):
         self.content = {}
@@ -72,6 +72,18 @@ class ScenarioLoaded(BaseMessage):
         self.resolution = resolution
         self.elevations = elevations
         self.obstacles = obstacles
+        self.start_coordinates = start_coordinates
+        self.start_heading = start_heading
+        self.end_coordinates = end_coordinates
+        super().__init__()
+
+class ScenarioLoadEndpointsRequest(BaseMessage):
+    def __init__(self, scenario_to_load):
+        self.scenario_to_load = scenario_to_load
+        super().__init__()
+
+class ScenarioEndpointsLoaded(BaseMessage):
+    def __init__(self, start_coordinates, start_heading, end_coordinates):
         self.start_coordinates = start_coordinates
         self.start_heading = start_heading
         self.end_coordinates = end_coordinates
@@ -145,51 +157,55 @@ class PathFindFromPositionRequest(BaseMessage):
         super().__init__()
 
 class PathFound(BaseMessage):
-    def __init__(self, path):
+    def __init__(self, path, distance_cost, energy_cost):
         self.path = path
+        self.distance_cost = distance_cost
+        self.energy_cost = energy_cost
         super().__init__()
 
 
 '''=======================================
 IDs
 ======================================='''
-_message_identifier_count = count(0)
-message_identifiers = {
+_message_type_count = count(0)
+message_types = {
     BaseMessage: -1,
 
     # general
-    SimpleMessage: next(_message_identifier_count),
+    SimpleMessage: next(_message_type_count),
 
     # scenarios
-    AvailableScenarioRequest: next(_message_identifier_count),
-    AvailableScenarios: next(_message_identifier_count),
-    ScenarioLoadRequest: next(_message_identifier_count),
-    ScenarioLoaded: next(_message_identifier_count),
+    AvailableScenarioRequest: next(_message_type_count),
+    AvailableScenarios: next(_message_type_count),
+    ScenarioLoadRequest: next(_message_type_count),
+    ScenarioLoaded: next(_message_type_count),
+    ScenarioLoadEndpointsRequest: next(_message_type_count),
+    ScenarioEndpointsLoaded: next(_message_type_count),
 
     # models
-    AvailableModelRequest: next(_message_identifier_count),
-    AvailableModels: next(_message_identifier_count),
-    ModelLoadRequest: next(_message_identifier_count),
-    ModelLoaded: next(_message_identifier_count),
+    AvailableModelRequest: next(_message_type_count),
+    AvailableModels: next(_message_type_count),
+    ModelLoadRequest: next(_message_type_count),
+    ModelLoaded: next(_message_type_count),
 
     # endpoints
-    StartPointSetRequest: next(_message_identifier_count),
-    StartPointSet: next(_message_identifier_count),
-    EndPointSetRequest: next(_message_identifier_count),
-    EndPointSet: next(_message_identifier_count),
+    StartPointSetRequest: next(_message_type_count),
+    StartPointSet: next(_message_type_count),
+    EndPointSetRequest: next(_message_type_count),
+    EndPointSet: next(_message_type_count),
 
     # obstacles
-    ObstaclesListSetRequest: next(_message_identifier_count),
-    ObstaclesChanged: next(_message_identifier_count),
+    ObstaclesListSetRequest: next(_message_type_count),
+    ObstaclesChanged: next(_message_type_count),
 
     # path
-    PathFindRequest: next(_message_identifier_count),
-    PathFindFromPositionRequest: next(_message_identifier_count),
-    PathFound: next(_message_identifier_count),
+    PathFindRequest: next(_message_type_count),
+    PathFindFromPositionRequest: next(_message_type_count),
+    PathFound: next(_message_type_count),
 }
 
-def create_message_from_id(message_id, **kwargs):
+def create_message_from_type(message_id, **kwargs):
 
-    for cls, identifier in message_identifiers.items():
-        if identifier == message_id:
+    for cls, message_type in message_types.items():
+        if message_type == message_id:
             return cls(**kwargs)
