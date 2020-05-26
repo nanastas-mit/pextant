@@ -133,7 +133,7 @@ class EndPointSet(BaseMessage):
         self.coordinates = coordinates
         super().__init__()
 
-# obstacle setting
+# obstacles
 class ObstaclesListSetRequest(BaseMessage):
     def __init__(self, coordinates_list, state):
         self.coordinates_list = coordinates_list

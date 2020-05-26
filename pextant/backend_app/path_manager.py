@@ -121,12 +121,9 @@ class PathManager(AppComponent):
         a model, a max slope, a start point, an initial heading, and an end point"""
 
         # read in the scenario file
-        local_path_file_name = path.join(PathManager.SCENARIOS_DIRECTORY, scenario_to_load)
-        with open(local_path_file_name, 'rb') as in_file:
-            json_bytes = in_file.read()
+        scenario: dict = utils.read_file_as_json(scenario_to_load, PathManager.SCENARIOS_DIRECTORY)
 
         # decode json
-        scenario: dict = utils.json_decode(json_bytes)
         model_file = scenario['model']
         max_slope = scenario['max_slope']
         start_coordinates = scenario['start']
@@ -139,10 +136,7 @@ class PathManager(AppComponent):
         self.load_model(model_file, max_slope, False)
         # obstacles
         if obstacles_file:
-            local_path_file_name = path.join(PathManager.OBSTACLES_DIRECTORY, obstacles_file)
-            with open(local_path_file_name, 'rb') as in_file:
-                json_bytes = in_file.read()
-            json_object = utils.json_decode(json_bytes)
+            json_object = utils.read_file_as_json(PathManager.OBSTACLES_DIRECTORY, obstacles_file)
             self.terrain_model.set_obstacles(json_object['obstacles'])
         # endpoint setting
         self.set_start_point(start_coordinates, coordinate_system, False)
