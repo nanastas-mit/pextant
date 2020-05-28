@@ -136,7 +136,7 @@ class PathManager(AppComponent):
         self.load_model(model_file, max_slope, False)
         # obstacles
         if obstacles_file:
-            json_object = utils.read_file_as_json(PathManager.OBSTACLES_DIRECTORY, obstacles_file)
+            json_object = utils.read_file_as_json(obstacles_file, PathManager.OBSTACLES_DIRECTORY)
             self.terrain_model.set_obstacles(json_object['obstacles'])
         # endpoint setting
         self.set_start_point(start_coordinates, coordinate_system, False)
@@ -368,7 +368,7 @@ class PathManager(AppComponent):
 
         # create list of changed points
         changed_obstacles = new_obstacles - original_obstacles
-        row_col_coordinates_list = changed_obstacles.nonzero()
+        row_col_coordinates_list = np.array(changed_obstacles.nonzero()).transpose().tolist()
 
         # dispatch obstacle change complete
         EventDispatcher.instance().trigger_event(
@@ -405,6 +405,34 @@ class PathManager(AppComponent):
             event_definitions.OBSTACLE_CHANGE_COMPLETE,
             row_col_coordinates_list,
             state
+        )
+
+    def clear_all_obstacles(self, cache_immediate=False):
+        """Clears all obstacles / makes all regions of terrain 'passable'"""
+
+        # clear cached obstacles
+        self.path_finder.clear_obstacles()
+
+        # store original obstacles
+        original_obstacles = self.terrain_model.obstacles.astype(bool)
+        if isinstance(original_obstacles, np.ma.core.MaskedArray):
+            original_obstacles = original_obstacles.filled(False)
+
+        # unset obstacle status at each current obstacle point
+        self.terrain_model.set_obstacle_map(original_obstacles, False)
+
+        # cache immediately if specified
+        if cache_immediate:
+            self.cache_obstacles()
+
+        # create list of changed points
+        row_col_coordinates_list = np.array(original_obstacles.nonzero()).transpose().tolist()
+
+        # dispatch obstacle setting complete
+        EventDispatcher.instance().trigger_event(
+            event_definitions.OBSTACLE_CHANGE_COMPLETE,
+            row_col_coordinates_list,
+            False
         )
 
     def find_path(self):

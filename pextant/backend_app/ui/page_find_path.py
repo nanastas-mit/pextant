@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import pextant.backend_app.events.event_definitions as event_definitions
 import pextant.backend_app.ui.fonts as fonts
@@ -130,11 +131,16 @@ class PageFindPath(PageBase):
         },
         'set_obstacle': {
             'title': 'Set Obstacle',
-            'save_btn_title': 'Save Current'
+            'clear_btn_title': 'Clear All'
         },
         'find_path': {
             'title': 'Find Path',
             'btn_text': 'Find'
+        },
+        'save_data': {
+            'title': 'Save Data',
+            'save_grid_btn_title': 'Obstacles (grid)',
+            'save_list_btn_title': 'Obstacles (list)'
         },
     }
 
@@ -210,7 +216,7 @@ class PageFindPath(PageBase):
         self.scenario_to_load = ''
         self.model_to_load = ''
         self.max_slope = 10
-        self.obstacle_radius = 20
+        self.obstacle_radius = 5
 
         # graph references
         self.blitted_texture = None
@@ -433,9 +439,6 @@ class PageFindPath(PageBase):
 
         # update obstacle image
         self.obstacle_img.set_data(self.path_manager.terrain_model.obstacle_mask())
-
-        # clear path (we've changed the cost)
-        self.found_path_line.set_data([], [])
 
         # re-cached blitted texture (to include the new obstacle)
         if self.blitting_active:
@@ -773,7 +776,7 @@ class PageFindPath(PageBase):
         radius_slider = tk.Scale(
             cell_frame,
             from_=0.5,
-            to=50,
+            to=20,
             resolution=0.5,
             orient=tk.HORIZONTAL,
             command=slider_command
@@ -782,14 +785,14 @@ class PageFindPath(PageBase):
         radius_slider.set(self.obstacle_radius)
         radius_slider.pack(padx=0, pady=0, side=tk.TOP)
 
-        # add save obstacles button
-        save_btn = tk.Button(
+        # add save (grid) obstacles button
+        clear_btn = tk.Button(
             cell_frame,
-            text=cell_data['save_btn_title'],
-            command=self.save_obstacles_command
+            text=cell_data['clear_btn_title'],
+            command=self.clear_all_obstacles_command
         )
-        cell.widgets["save_btn"] = save_btn
-        save_btn.pack(padx=4, pady=4, side=tk.TOP)
+        cell.widgets["clear_btn"] = clear_btn
+        clear_btn.pack(padx=4, pady=4, side=tk.TOP)
 
     def set_obstacle_command(self):
 
@@ -818,39 +821,20 @@ class PageFindPath(PageBase):
             self.pending_obstacle_artist.set_alpha(0.0)
             self.redraw_canvas()
 
-    def save_obstacles_command(self):
+    def clear_all_obstacles_command(self):
 
-        # get 2D list of current obstacles
-        current_obstacles = self.path_manager.terrain_model.obstacles.tolist()
-
-        # encode as json
-        json_object = {
-            'obstacles': current_obstacles
-        }
-        json_bytes = utils.json_encode(json_object)
-
-        # open dialog for saving file
-        cwd = os.getcwd()
-        obstacles_dir = os.path.join(cwd, PathManager.OBSTACLES_DIRECTORY)
-        with tk.filedialog.asksaveasfile(
-                mode="wb",
-                title='Save Obstacles',
-                initialdir=obstacles_dir,
-                filetypes=[('JSON', '*.json')],
-                defaultextension='json'
-        ) as in_file:
-            # write the json to the file
-            in_file.write(json_bytes)
+        obstacles = self.path_manager.clear_all_obstacles()
+        self.refresh_ui()
 
     def refresh_set_obstacle_cell(self, cell: BannerCell):
 
         btn = cell.widgets["default_btn"]
-        save_btn = cell.widgets["save_btn"]
+        clear_btn = cell.widgets["clear_btn"]
 
         # standard configuration
         btn['state'] = tk.DISABLED
         btn['text'] = "Set Obstacle"
-        save_btn['state'] = tk.DISABLED
+        clear_btn['state'] = tk.DISABLED
 
         if self.state == PageFindPath.STATE_SETTING_OBSTACLE:
             btn['state'] = tk.NORMAL
@@ -860,7 +844,7 @@ class PageFindPath(PageBase):
         if self.state == PageFindPath.STATE_READY:
             # enable / disable buttons based on existence of parameters
             btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
-            save_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
+            clear_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
 
     # find path
     def setup_find_path_cell(self, cell: BannerCell, cell_frame, cell_data):
@@ -910,6 +894,101 @@ class PageFindPath(PageBase):
         else:
             distance_label['text'] = "Distance: -"
             metabolic_label['text'] = "Energy: -"
+
+    # save
+    def setup_save_data_cell(self, cell: BannerCell, cell_frame, cell_data):
+
+        # add save (grid) obstacles button
+        save_grid_btn = tk.Button(
+            cell_frame,
+            text=cell_data['save_grid_btn_title'],
+            command=self.save_obstacles_as_grid_command
+        )
+        cell.widgets["save_grid_btn"] = save_grid_btn
+        save_grid_btn.pack(padx=4, pady=4, side=tk.TOP)
+
+        # add save (list) obstacles button
+        save_list_btn = tk.Button(
+            cell_frame,
+            text=cell_data['save_list_btn_title'],
+            command=self.save_obstacles_as_list_command
+        )
+        cell.widgets["save_list_btn"] = save_list_btn
+        save_list_btn.pack(padx=4, pady=4, side=tk.TOP)
+
+    def save_obstacles_as_grid_command(self):
+
+        # open dialog for saving file
+        cwd = os.getcwd()
+        obstacles_dir = os.path.join(cwd, PathManager.OBSTACLES_DIRECTORY)
+        in_file = tk.filedialog.asksaveasfile(
+                mode="wb",
+                title='Save Obstacles (boolean grid)',
+                initialdir=obstacles_dir,
+                filetypes=[('JSON', '*.json')],
+                defaultextension='json'
+        )
+        if in_file is not None:
+
+            # get python 'matrix' (list of lists) of current obstacles
+            current_obstacles = self.path_manager.terrain_model.obstacles.tolist()
+
+            # encode as json
+            json_object = {
+                'obstacles': current_obstacles
+            }
+            json_bytes = utils.json_encode(json_object)
+
+            # write the json to the file
+            in_file.write(json_bytes)
+
+            # close file
+            in_file.close()
+
+    def save_obstacles_as_list_command(self):
+
+        # open dialog for saving file
+        cwd = os.getcwd()
+        obstacles_dir = os.path.join(cwd, PathManager.OBSTACLES_DIRECTORY)
+        in_file = tk.filedialog.asksaveasfile(
+                mode="wb",
+                title='Save Obstacles (coordinates list)',
+                initialdir=obstacles_dir,
+                filetypes=[('JSON', '*.json')],
+                defaultextension='json'
+        )
+        if in_file is not None:
+
+            # get 2D list of current obstacles
+            current_obstacles = self.path_manager.terrain_model.obstacles
+            obstacle_coordinates_list = np.array(current_obstacles.nonzero()).transpose().tolist()
+
+            # encode as json
+            json_object = {
+                'obstacles': obstacle_coordinates_list
+            }
+            json_bytes = utils.json_encode(json_object)
+
+            # write the json to the file
+            in_file.write(json_bytes)
+
+            # close file
+            in_file.close()
+
+    def refresh_save_data_cell(self, cell: BannerCell):
+
+        save_grid_btn = cell.widgets["save_grid_btn"]
+        save_list_btn = cell.widgets["save_list_btn"]
+
+        # standard configuration
+        save_grid_btn['state'] = tk.DISABLED
+        save_list_btn['state'] = tk.DISABLED
+
+        # READY
+        if self.state == PageFindPath.STATE_READY:
+            # enable / disable buttons based on existence of parameters
+            save_grid_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
+            save_list_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
 
     '''=======================================
     DRAWING
