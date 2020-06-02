@@ -1,0 +1,8 @@
+{
+  "model": "tutorial.txt",
+  "max_slope": 10,
+  "coordinate_system": "coord",
+  "start": [13, 35],
+  "start_heading": 90.0,
+  "end": [27, 12]
+}
