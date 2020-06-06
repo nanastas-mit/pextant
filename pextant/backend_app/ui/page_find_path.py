@@ -112,7 +112,9 @@ class PageFindPath(PageBase):
     CELL_DATA = {
         'load_scenario': {
             'title': 'Scenarios',
-            'btn_text': 'Load'
+            'btn_text': 'Load',
+            'load_endpoints_text': 'Endpoints',
+            'load_obstacles_text': 'Obstacles'
         },
         'load_model': {
             'title': 'Terrain Model',
@@ -189,6 +191,8 @@ class PageFindPath(PageBase):
 
         super().__init__(master, {
             event_definitions.SCENARIO_LOAD_COMPLETE: self.on_scenario_loaded,
+            event_definitions.SCENARIO_LOAD_ENDPOINTS_COMPLETE: self.on_scenario_endpoints_loaded,
+            event_definitions.SCENARIO_LOAD_OBSTACLE_COMPLETE: self.on_obstacles_changed,
             event_definitions.MODEL_LOAD_COMPLETE: self.on_model_loaded,
             event_definitions.MODEL_UNLOAD_COMPLETE: self.on_model_unloaded,
             event_definitions.START_POINT_SET_COMPLETE: self.on_start_point_set,
@@ -377,6 +381,11 @@ class PageFindPath(PageBase):
         self.on_start_point_set(start_point)
         self.on_end_point_set(end_point)
 
+    def on_scenario_endpoints_loaded(self, start_point, end_point, initial_heading):
+
+        self.on_start_point_set(start_point)
+        self.on_end_point_set(end_point)
+
     def on_model_loaded(self, terrain_model):
 
         # create the terrain image
@@ -444,6 +453,10 @@ class PageFindPath(PageBase):
         if self.blitting_active:
             self.re_cache_blitted_texture()
 
+        # if in ready state, force a refresh
+        if self.state == PageFindPath.STATE_READY:
+            self.refresh_ui()
+
         # redraw
         self.redraw_canvas()
 
@@ -470,6 +483,16 @@ class PageFindPath(PageBase):
     # load scenario
     def setup_load_scenario_cell(self, cell: BannerCell, cell_frame, cell_data):
 
+        # load endpoints button
+        cell.widgets["load_endpoint_btn"] = \
+            tk.Button(cell_frame, text=cell_data['load_endpoints_text'], command=self.load_scenario_endpoints_command)
+        cell.widgets["load_endpoint_btn"].pack(padx=BannerCell.PAD_X, pady=BannerCell.PAD_Y, side=tk.TOP)
+
+        # load endpoints button
+        cell.widgets["load_obstacles_btn"] = \
+            tk.Button(cell_frame, text=cell_data['load_obstacles_text'], command=self.load_scenario_obstacles_command)
+        cell.widgets["load_obstacles_btn"].pack(padx=BannerCell.PAD_X, pady=BannerCell.PAD_Y, side=tk.TOP)
+
         # get list of available scenarios
         scenario_files = PathManager.get_available_scenarios()
 
@@ -494,6 +517,7 @@ class PageFindPath(PageBase):
 
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
+
             # note that we're loading
             self.state = PageFindPath.STATE_LOADING_SCENARIO
 
@@ -503,17 +527,45 @@ class PageFindPath(PageBase):
                 self.scenario_to_load
             )
 
+    def load_scenario_endpoints_command(self):
+
+        # if we're not doing anything else
+        if self.state == PageFindPath.STATE_READY:
+
+            # issue load endpoints request
+            EventDispatcher.instance().trigger_event(
+                event_definitions.SCENARIO_LOAD_ENDPOINTS_REQUESTED,
+                self.scenario_to_load
+            )
+
+    def load_scenario_obstacles_command(self):
+
+        # if we're not doing anything else
+        if self.state == PageFindPath.STATE_READY:
+
+            # issue load model request
+            EventDispatcher.instance().trigger_event(
+                event_definitions.SCENARIO_LOAD_OBSTACLE_REQUEST,
+                self.scenario_to_load
+            )
+
     def refresh_load_scenario_cell(self, cell: BannerCell):
 
         btn = cell.widgets["default_btn"]
+        load_endpoint_btn = cell.widgets["load_endpoint_btn"]
+        load_obstacles_btn = cell.widgets["load_obstacles_btn"]
 
         # standard configuration
         btn['state'] = tk.DISABLED
+        load_endpoint_btn['state'] = tk.DISABLED
+        load_obstacles_btn['state'] = tk.DISABLED
 
         # READY
         if self.state == PageFindPath.STATE_READY:
             # enable / disable buttons based on existence of parameters
             btn['state'] = tk.NORMAL
+            load_endpoint_btn['state'] = tk.DISABLED if self.path_manager.terrain_model is None else tk.NORMAL
+            load_obstacles_btn['state'] = tk.DISABLED if self.path_manager.terrain_model is None else tk.NORMAL
 
     # load model
     def setup_load_model_cell(self, cell: BannerCell, cell_frame, cell_data):

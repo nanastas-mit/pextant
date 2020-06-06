@@ -1,8 +1,9 @@
 {
   "model": "arboretum.img",
+  "obstacles": "arboretum.json",
   "max_slope": 10,
   "coordinate_system": "coord",
-  "start": [530, 868],
+  "start": [643, 318],
   "start_heading": 180.0,
-  "end": [714, 1026]
+  "end": [599, 224]
 }

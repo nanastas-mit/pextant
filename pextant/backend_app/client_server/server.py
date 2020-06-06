@@ -56,7 +56,7 @@ class Server(AppComponent):
             self.server_socket.bind(self.server_address)
             self.server_socket.listen()
 
-            print("listening for clients at {0}:{1}".format(self.server_address[0], self.server_address[1]))
+            print(f"listening for clients at {self.server_address[0]}:{self.server_address[1]}")
 
             # register with selector (read only - only job is to accept connections)
             self.selector.register(self.server_socket, selectors.EVENT_READ, data=Server.CONNECTION_ACCEPT_SERVER_DATA)

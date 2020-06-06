@@ -19,4 +19,5 @@ if __name__ == '__main__':
 
     # create the app state manager
     app_man = AppStateManager(create_gui=args.create_gui)
+    print("Ready to Begin")
     app_man.mainloop()

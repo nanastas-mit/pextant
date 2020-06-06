@@ -62,6 +62,10 @@ class PathManager(AppComponent):
             self.load_scenario_endpoints
         )
         event_dispatcher.register_listener(
+            event_definitions.SCENARIO_LOAD_OBSTACLE_REQUEST,
+            self.load_scenario_obstacles
+        )
+        event_dispatcher.register_listener(
             event_definitions.MODEL_LOAD_REQUESTED,
             self.create_threaded_switch(self.load_model)
         )
@@ -184,6 +188,29 @@ class PathManager(AppComponent):
             start_heading
         )
 
+    def load_scenario_obstacles(self, scenario_to_load):
+
+        # clear cached obstacles
+        self.path_finder.clear_obstacles()
+
+        # read in the scenario file
+        scenario: dict = utils.read_file_as_json(scenario_to_load, PathManager.SCENARIOS_DIRECTORY)
+
+        # get and decode obstacles file
+        obstacles_file = scenario.get('obstacles', None)
+        if obstacles_file:
+            json_object = utils.read_file_as_json(obstacles_file, PathManager.OBSTACLES_DIRECTORY)
+            self.terrain_model.set_obstacles(json_object['obstacles'])
+
+        # get new obstacles
+        new_obstacles = self.terrain_model.obstacles.astype(bool)
+
+        # dispatch obstacle setting complete
+        EventDispatcher.instance().trigger_event(
+            event_definitions.SCENARIO_LOAD_OBSTACLE_COMPLETE,
+            new_obstacles
+        )
+
     '''=======================================
     MODELS
     ======================================='''
@@ -195,6 +222,9 @@ class PathManager(AppComponent):
 
     def load_model(self, model_to_load, max_slope, dispatch_completed_event=True):
         """load terrain model from data at specified 'model_to_load' location"""
+
+        # clear everything
+        self.path_finder.clear_all()
 
         # get the name of the file of the model to load
         local_path_file_name = path.join(PathManager.MODELS_DIRECTORY, model_to_load)
