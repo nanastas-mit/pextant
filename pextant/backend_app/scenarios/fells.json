@@ -1,8 +1,0 @@
-{
-  "model": "fells.img",
-  "max_slope": 10,
-  "coordinate_system": "coord",
-  "start": [254, 752],
-  "start_heading": 350.0,
-  "end": [237, 811]
-}

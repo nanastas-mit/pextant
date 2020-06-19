@@ -362,7 +362,7 @@ class PathManager(AppComponent):
             EventDispatcher.instance().trigger_event(event_definitions.HEURISTICS_CACHING_COMPLETE)
 
     '''=======================================
-    PATH FINDING & MANIPULATION
+    OBSTACLES
     ======================================='''
     def set_radial_obstacle(self, coordinates, coordinate_system, radius, state, cache_immediate=False):
         """Mark a circle of specified radius at the specified location as either
@@ -465,6 +465,9 @@ class PathManager(AppComponent):
             False
         )
 
+    '''=======================================
+    PATH FINDING
+    ======================================='''
     def find_path(self):
         """If all relevant data has been set (model, start/end points, chaches), finds an optimal path"""
 
@@ -506,6 +509,44 @@ class PathManager(AppComponent):
 
         # find path
         self.find_path()
+
+    def set_path(self, path_to_set, coordinate_system):
+
+        # if no terrain model, early out
+        if not self.terrain_model:
+            return
+
+        # go through all coordinates in list, create row_col list
+        row_col_coordinates_list = []
+        for coordinates in path_to_set:
+            geo_point = self.create_geo_point_from_coordinates(coordinates, coordinate_system)
+            row_col = geo_point.to(self.terrain_model.ROW_COL)
+            row_col_coordinates_list.append(row_col)
+
+        # set endpoints
+        if len(row_col_coordinates_list) > 0:
+            self.set_start_point(row_col_coordinates_list[0], Cartesian.SYSTEM_NAME)
+            self.set_end_point(row_col_coordinates_list[-1], Cartesian.SYSTEM_NAME)
+
+        # save path
+        self.found_path = row_col_coordinates_list
+
+        # calculate costs
+        col_row = np.array(self.found_path).transpose()[::-1]  # matrix where 0th row is x's, 1st is y's
+        found_geo_polygon_path = GeoPolygon(self.terrain_model.COL_ROW, *col_row)
+        traverse = TraversePath.frommap(found_geo_polygon_path, self.terrain_model)
+        _, _, incremental_distances = self.agent.path_dl_slopes(traverse)
+        self.path_distance = np.sum(incremental_distances)
+        incremental_energy_usage, _ = self.agent.path_energy_expenditure(traverse)
+        self.path_energy = np.sum(incremental_energy_usage)
+
+        # dispatch path found event
+        EventDispatcher.instance().trigger_event(
+            event_definitions.PATH_FIND_COMPLETE,
+            self.found_path,
+            self.path_distance,
+            self.path_energy
+        )
 
     '''=======================================
     HELPERS

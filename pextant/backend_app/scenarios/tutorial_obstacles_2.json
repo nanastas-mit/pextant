@@ -1,6 +1,6 @@
 {
   "model": "tutorial.txt",
-  "obstacles": "tutorial_terrain_2.json",
+  "obstacles": "tutorial_obstacles_2.json",
   "max_slope": 10,
   "coordinate_system": "coord",
   "start": [166, 158],
