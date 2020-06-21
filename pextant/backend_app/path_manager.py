@@ -135,6 +135,7 @@ class PathManager(AppComponent):
         coordinate_system = scenario['coordinate_system']
         start_heading = scenario['start_heading']
         obstacles_file = scenario.get('obstacles', None)
+        obstacles_list_file = scenario.get('obstacles_list', None)
 
         # model
         self.load_model(model_file, max_slope, False)
@@ -142,6 +143,14 @@ class PathManager(AppComponent):
         if obstacles_file:
             json_object = utils.read_file_as_json(obstacles_file, PathManager.OBSTACLES_DIRECTORY)
             self.terrain_model.set_obstacles(json_object['obstacles'])
+        # obstacles list
+        elif obstacles_list_file:
+            json_object = utils.read_file_as_json(obstacles_list_file, PathManager.OBSTACLES_DIRECTORY)
+            obstacles_list = json_object['obstacles']
+            obstacles_grid = np.zeros(self.terrain_model.shape, dtype=bool)
+            for coordinates in obstacles_list:
+                obstacles_grid[coordinates[0], coordinates[1]] = True
+            self.terrain_model.set_obstacles(obstacles_grid)
         # endpoint setting
         self.set_start_point(start_coordinates, coordinate_system, False)
         self.set_end_point(end_coordinates, coordinate_system, False)
@@ -195,12 +204,21 @@ class PathManager(AppComponent):
 
         # read in the scenario file
         scenario: dict = utils.read_file_as_json(scenario_to_load, PathManager.SCENARIOS_DIRECTORY)
-
-        # get and decode obstacles file
         obstacles_file = scenario.get('obstacles', None)
+        obstacles_list_file = scenario.get('obstacles_list', None)
+
+        # obstacles
         if obstacles_file:
             json_object = utils.read_file_as_json(obstacles_file, PathManager.OBSTACLES_DIRECTORY)
             self.terrain_model.set_obstacles(json_object['obstacles'])
+        # obstacles list
+        elif obstacles_list_file:
+            json_object = utils.read_file_as_json(obstacles_list_file, PathManager.OBSTACLES_DIRECTORY)
+            obstacles_list = json_object['obstacles']
+            obstacles_grid = np.zeros(self.terrain_model.shape, dtype=bool)
+            for coordinates in obstacles_list:
+                obstacles_grid[coordinates[0], coordinates[1]] = True
+            self.terrain_model.set_obstacles(obstacles_grid)
 
         # get new obstacles
         new_obstacles = self.terrain_model.obstacles.astype(bool)

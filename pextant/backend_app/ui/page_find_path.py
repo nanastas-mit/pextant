@@ -1137,7 +1137,7 @@ class PageFindPath(PageBase):
 
         # create grid of added obstacles
         added_obstacles_list = save_data['addedObstacles']
-        added_obstacles_grid = np.zeros(self.path_manager.terrain_model.obstacles.shape)
+        added_obstacles_grid = np.zeros(self.path_manager.terrain_model.shape)
         for coordinates in added_obstacles_list:
             added_obstacles_grid[coordinates[0], coordinates[1]] = 1
 
