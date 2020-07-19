@@ -177,6 +177,7 @@ class EnvironmentalModel(GeoMesh):
     def set_obstacle_map(self, obstacle_map, state=True):
 
         self.obstacles[obstacle_map] = state
+        self.passable = np.logical_not(self.obstacles)
 
     def set_circular_obstacle(self, center, radius, state=True):
 

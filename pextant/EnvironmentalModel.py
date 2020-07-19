@@ -200,7 +200,8 @@ class GridMeshModel(EnvironmentalModel):
     def _inbounds_bool(self, mesh_coordinates):
         below_bounds = mesh_coordinates < self.shape
         over_bounds = mesh_coordinates >= np.zeros(2)
-        boolean = np.logical_and(below_bounds, over_bounds).all(1)
+        and_result = np.logical_and(below_bounds, over_bounds)
+        boolean = and_result.all(1)
         return boolean
 
     def _hasdata(self, mesh_coordinates):

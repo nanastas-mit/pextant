@@ -501,16 +501,25 @@ class PathManager(AppComponent):
         target = self.terrain_model.getMeshElement(self.end_point).mesh_coordinate  # unscaled (row, column)
 
         # save path
-        self.found_path = self.path_finder.astar_solve(source, target)  # list of unscaled (row, column)
+        source_passable = len(self.terrain_model.isPassable(self.start_point)) > 0
+        target_passable = len(self.terrain_model.isPassable(self.end_point)) > 0
+        if source_passable and target_passable:
+            self.found_path = self.path_finder.astar_solve(source, target)  # list of unscaled (row, column)
+        else:
+            self.found_path = []
 
         # calculate costs
-        col_row = np.array(self.found_path).transpose()[::-1]  # matrix where 0th row is x's, 1st is y's
-        found_geo_polygon_path = GeoPolygon(self.terrain_model.COL_ROW, *col_row)
-        traverse = TraversePath.frommap(found_geo_polygon_path, self.terrain_model)
-        _, _, incremental_distances = self.agent.path_dl_slopes(traverse)
-        self.path_distance = np.sum(incremental_distances)
-        incremental_energy_usage, _ = self.agent.path_energy_expenditure(traverse)
-        self.path_energy = np.sum(incremental_energy_usage)
+        if len(self.found_path) > 0:
+            col_row = np.array(self.found_path).transpose()[::-1]  # matrix where 0th row is x's, 1st is y's
+            found_geo_polygon_path = GeoPolygon(self.terrain_model.COL_ROW, *col_row)
+            traverse = TraversePath.frommap(found_geo_polygon_path, self.terrain_model)
+            _, _, incremental_distances = self.agent.path_dl_slopes(traverse)
+            self.path_distance = np.sum(incremental_distances)
+            incremental_energy_usage, _ = self.agent.path_energy_expenditure(traverse)
+            self.path_energy = np.sum(incremental_energy_usage)
+        else:
+            self.path_distance = 0
+            self.path_energy = 0
 
         # dispatch path found event
         EventDispatcher.instance().trigger_event(
