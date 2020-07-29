@@ -4,6 +4,22 @@ Installation Instructions
 pextant is developed in Python 3.7 (32 bit and 64 bit should both work). Future releases might include packaging and automatic installation through a ``setup.py`` file. In the meantime, installation is facilitated through a combination of the conda enviroment manager and the pip tool. 
 **Only tested on Windows machines**
 
+Clone This Repository
+--------------------------------
+
+You can clone this repo using whatever method you prefer (command line, GitHub Desktop GUI, whatever), but know this: **Inside the pextant_cpp folder is the pybind11 Git submodule**
+
+In order to sync submodules, you must:
+- Clone the repo in whatever way you prefer
+- Open a command prompt (you can probably do through this via a GUI as well)
+- Navigate to the local directory that you cloned the repo to
+- Type the following commands:
+
+.. code-block:: python
+
+	git submodule init
+	git submodule update
+
 Create the 'pextant' Environment
 --------------------------------
 
