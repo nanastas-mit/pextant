@@ -10,6 +10,7 @@ Clone This Repository
 You can clone this repo using whatever method you prefer (command line, GitHub Desktop GUI, whatever), but know this: **Inside the pextant_cpp folder is the pybind11 Git submodule**
 
 In order to sync submodules, you must:
+
 - Clone the repo in whatever way you prefer
 - Open a command prompt (you can probably do through this via a GUI as well)
 - Navigate to the local directory that you cloned the repo to
