@@ -11,9 +11,9 @@ You can clone this repo using whatever method you prefer (command line, GitHub D
 
 In order to sync submodules, you must:
 
-- Clone the repo in whatever way you prefer
+- Clone the pextant repo in whatever way you prefer
 - Open a command prompt (you can probably do through this via a GUI as well)
-- Navigate to the local directory that you cloned the repo to
+- Navigate to the local directory that you cloned the pextant repo to
 - Type the following commands:
 
 .. code-block:: python
@@ -43,29 +43,37 @@ Using Visual Studio 2019 (or higher):
 	- On the 'Installed' tab, click the 'Modify' button on the Visual Studio installation you'd like to use
 	- On the 'Individual Components' tab, check 'C++ CMake Tools for Windows'
 	- Click the 'Modify' button (should be in the lower right corner of the screen)
+	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/cmakeVS.png
 	
-- Open the Project (using 'Open Folder')
+- Open the Project in Visual Studio
 	- In Visual Studio, use 'File->Open->Open Folder' on the pextant_cpp folder
+	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/OpenFolderVS.png
 	- for more info, see Microsoft 'CMake Projects in Visual Studio' documenation
 		(https://docs.microsoft.com/en-us/cpp/build/cmake-projects-in-visual-studio?view=vs-2019)
 		
 - Make sure project points to correct version of python.exe, CMake generator
 	- Open the project settings using 'Project->CMake Settings for pextant_cpp' (just a special viewer for CMakeSettings.json)
-	- In 'CMake Variables and Cache', set PYTHON_EXECUTABLE to whatever python.exe you're using
-		- You may have to check 'show advanced variables' to see PYTHON_EXECUTABLE
-	- Under 'Show Advanced Settings', set 'CMake generator' to whatever version of visual studio you're using
-		- e.g. Visual Studio 16 2019 Win64
+	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/CmakeSettings.png
+	- In 'CMake Variables and Cache', set PYTHON_EXECUTABLE to whatever python.exe you're using (You may have to check 'show advanced variables' to see PYTHON_EXECUTABLE)
+	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/CmakeGenerator.png
+	- Under 'Show Advanced Settings', set 'CMake generator' to whatever version of visual studio you're using (e.g. Visual Studio 16 2019 Win64)
+	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/PythonExecutable.png
 		
 - Build the project!
 	- click 'Project->Generate Cache for pextant_cpp'
+	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/GenerateCache.png
 	- if something goes wrong, refer to 'CMakeLists.txt' for more info
 	
 - Install module using setup.py
-	- open command prompt
+	- open Anaconda prompt
+	- activate 'pextant' environment
 	- navigate to folder containing the pextant_cpp folder/project
-	- type 'pip install ./pextant_cpp'
-		- for this to work, you will need to have the CMake python package installed in your Python environment
-	- this is where the module's version number lives, so if you change something you should update this
+	- type:
+	.. code-block:: python
+
+		pip install ./pextant_cpp
+
+	- for this to work, you will need to have the CMake python package installed in your Python environment
 	
 - All done!
 	- a pextant_cpp .pyd should now live in the site-packages folder of your python environment
