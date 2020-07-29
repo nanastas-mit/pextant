@@ -1,4 +1,4 @@
-name: pextant_test
+name: pextant
 channels:
   - conda-forge
   - defaults
