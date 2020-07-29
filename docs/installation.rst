@@ -54,14 +54,17 @@ Using Visual Studio 2019 (or higher):
 - Make sure project points to correct version of python.exe, CMake generator
 	- Open the project settings using 'Project->CMake Settings for pextant_cpp' (just a special viewer for CMakeSettings.json)
 	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/CmakeSettings.png
+	
 	- In 'CMake Variables and Cache', set PYTHON_EXECUTABLE to whatever python.exe you're using (You may have to check 'show advanced variables' to see PYTHON_EXECUTABLE)
 	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/CmakeGenerator.png
+	
 	- Under 'Show Advanced Settings', set 'CMake generator' to whatever version of visual studio you're using (e.g. Visual Studio 16 2019 Win64)
 	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/PythonExecutable.png
 		
 - Build the project!
 	- click 'Project->Generate Cache for pextant_cpp'
 	.. image:: https://github.com/nanastas-mit/pextant/blob/master/docs/images/GenerateCache.png
+	
 	- if something goes wrong, refer to 'CMakeLists.txt' for more info
 	
 - Install module using setup.py
