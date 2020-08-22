@@ -6,7 +6,7 @@ from pextant.backend_app.app_component import AppComponent
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
 from pextant.EnvironmentalModel import load_legacy, GDALMesh, load_obstacle_map
 from pextant.explorers import Astronaut, TraversePath
-from pextant.lib.geoshapely import GeoPoint, GeoPolygon, UTM, LatLon, Cartesian, LAT_LONG
+from pextant.lib.geoshapely import GeoPoint, GeoPolygon, LatLon, Cartesian, LAT_LONG
 from pextant.solvers.astarMesh import ExplorerCost
 from pextant_cpp import PathFinder
 from threading import Thread

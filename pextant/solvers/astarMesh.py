@@ -245,9 +245,27 @@ class astarSolver(SEXTANTSolver):
         super(astarSolver, self).__init__(env_model, cost_function, viz)
 
         # if using networkx-based implementation, set G
-        if algorithm_type == astarSolver.PY_NETWORKX or \
-                algorithm_type == astarSolver.CPP_NETWORKX:
+        if algorithm_type == astarSolver.PY_NETWORKX or algorithm_type == astarSolver.CPP_NETWORKX:
             self.G = GG(self)
+
+        # if we're using CPP external module
+        if algorithm_type == astarSolver.CPP_NETWORKX:
+
+            # create CPP object
+            self.path_finder = pextant_cpp.PathFinder()
+
+            # set kernel
+            kernel_list = self.env_model.searchKernel.getKernel().tolist()
+            self.path_finder.set_kernel(kernel_list)
+
+            # cache data
+            cached_costs = self.cost_function.cached["costs"]
+            if cached_costs is None:
+                cached_costs = self.cost_function.create_costs_cache()
+            cost_map = cached_costs["energy"].tolist()
+            self.path_finder.cache_costs(cost_map)
+            obstacle_map = self.env_model.obstacles.astype(int).tolist()
+            self.path_finder.cache_obstacles(obstacle_map)
 
     def accelerate(self, weight=10):
         self.cost_function = ExplorerCost(self.explorer_model, self.env_model, self.optimize_on,
@@ -301,6 +319,9 @@ class astarSolver(SEXTANTSolver):
 
     def solvenx_cpp(self, startpoint, endpoint):
 
+        # reset any prior progress
+        self.path_finder.reset_progress()
+
         # get source and target coordinates
         source = self.env_model.getMeshElement(startpoint).mesh_coordinate  # unscaled (row, column)
         target = self.env_model.getMeshElement(endpoint).mesh_coordinate  # unscaled (row, column)
@@ -308,20 +329,12 @@ class astarSolver(SEXTANTSolver):
         # check that we have data at both start and end
         if self.env_model.elt_hasdata(startpoint) and self.env_model.elt_hasdata(endpoint):
 
-            # create pathfinder
-            path_finder = pextant_cpp.PathFinder()
-
-            # cache data
-            cached_costs = self.cost_function.create_costs_cache()
-            cost_map = cached_costs["energy"].tolist()
-            path_finder.cache_costs(cost_map)
-            obstacle_map = self.env_model.obstacles.astype(int).tolist()
-            path_finder.cache_obstacles(obstacle_map)
+            # cache heuristic
             heuristics_map = self.cost_function.create_heuristic_cache(target).tolist()
-            path_finder.cache_heuristics(heuristics_map)
+            self.path_finder.cache_heuristics(heuristics_map)
 
             # perform search
-            raw = path_finder.astar_solve(source, target)
+            raw = self.path_finder.astar_solve(source, target)
 
             # if we have a good result
             if len(raw) > 0:

@@ -28,7 +28,7 @@ class Server(AppComponent):
 
         super().__init__(manager)
 
-        # create selector
+        # create selector (object for handling socket events on multiple socket connections)
         self.selector = selectors.DefaultSelector()
 
         # store server information, reference to socket

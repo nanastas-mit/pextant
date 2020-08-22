@@ -14,7 +14,7 @@ from matplotlib.lines import Line2D
 from matplotlib.pyplot import Circle
 from pextant.backend_app.dependency_injection import RequiredFeature, has_attributes
 from pextant.backend_app.events.event_dispatcher import EventDispatcher
-from pextant.lib.geoshapely import GeoPoint, UTM, LatLon, Cartesian, LAT_LONG
+from pextant.lib.geoshapely import GeoPoint, Cartesian
 from pextant.backend_app.path_manager import PathManager
 from pextant.backend_app.ui.page_base import PageBase
 from tkinter.filedialog import FileDialog
@@ -84,7 +84,6 @@ class PageFindPath(PageBase):
     FIELDS
     ======================================='''
     MODELS_DIRECTORY = "models"
-    SAVE_DATA_DIRECTORY = "save_data"
 
     # 'enum' for current state
     STATE_READY = 1
@@ -143,13 +142,6 @@ class PageFindPath(PageBase):
             'title': 'Save Data',
             'save_grid_btn_title': 'Obstacles (grid)',
             'save_list_btn_title': 'Obstacles (list)'
-        },
-        'load_data': {
-            'title': 'Load Data',
-            'load_path_title': 'Path',
-            'load_added_title': 'Added',
-            'load_removed_title': 'Removed',
-            'clear_title': 'Clear'
         },
     }
 
@@ -211,7 +203,7 @@ class PageFindPath(PageBase):
             event_definitions.PATH_FIND_COMPLETE: self.on_path_found,
         })
 
-        # required features
+        # dependency injected path_manager object
         self.path_manager = RequiredFeature(
             "path_manager",
             has_attributes(
@@ -226,7 +218,6 @@ class PageFindPath(PageBase):
         self.banner_cells = []
         self.scenario_to_load = ''
         self.model_to_load = ''
-        self.save_to_load = ''
         self.max_slope = 10
         self.obstacle_radius = 5
 
@@ -834,9 +825,6 @@ class PageFindPath(PageBase):
     # obstacles
     def setup_set_obstacle_cell(self, cell: BannerCell, cell_frame, cell_data):
 
-        hey = tk.Frame()
-        hey.winfo_width()
-
         # add radius slider
         def slider_command(value):
             self.obstacle_radius = float(value)
@@ -1057,141 +1045,6 @@ class PageFindPath(PageBase):
             # enable / disable buttons based on existence of parameters
             save_grid_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
             save_list_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
-
-    # load
-    def setup_load_data_cell(self, cell: BannerCell, cell_frame, cell_data):
-
-        # get list of save files
-        save_data_files = utils.get_files_in_subdirectory(self.SAVE_DATA_DIRECTORY)
-
-        # scenario dropdown
-        def update_values():
-            save_file_dropdown['values'] = utils.get_files_in_subdirectory(self.SAVE_DATA_DIRECTORY)
-        def on_save_selected(e):
-            self.save_to_load = str(save_file_dropdown.get())
-        save_file_dropdown = ttk.Combobox(
-            cell_frame,
-            width=12,
-            state="readonly",
-            values=save_data_files,
-            postcommand=update_values
-        )
-        save_file_dropdown.bind("<<ComboboxSelected>>", on_save_selected)
-        save_file_dropdown.current(0)
-        on_save_selected(None)  # simulate a select of 'current'
-        save_file_dropdown.pack(padx=4, pady=4, side=tk.TOP)
-
-        # add load path button
-        load_path_btn = tk.Button(
-            cell_frame,
-            text=cell_data['load_path_title'],
-            command=self.load_path_command
-        )
-        cell.widgets["load_path_btn"] = load_path_btn
-        load_path_btn.pack(padx=4, pady=4, side=tk.TOP)
-
-        # add load added obstacles button
-        load_added_btn = tk.Button(
-            cell_frame,
-            text=cell_data['load_added_title'],
-            command=self.load_added_obstacles_command
-        )
-        cell.widgets["load_added_btn"] = load_added_btn
-        load_added_btn.pack(padx=4, pady=4, side=tk.TOP)
-
-        # add load removed obstacles button
-        load_removed_btn = tk.Button(
-            cell_frame,
-            text=cell_data['load_removed_title'],
-            command=self.load_removed_obstacles_command
-        )
-        cell.widgets["load_removed_btn"] = load_removed_btn
-        #load_removed_btn.pack(padx=4, pady=4, side=tk.TOP)
-
-        # add clear button
-        clear_btn = tk.Button(
-            cell_frame,
-            text=cell_data['clear_title'],
-            command=self.clear_loaded_obstacles_command
-        )
-        cell.widgets["clear_btn"] = clear_btn
-        clear_btn.pack(padx=4, pady=4, side=tk.TOP)
-
-    def load_path_command(self):
-
-        # load the data
-        save_data: dict = utils.read_file_as_json(self.save_to_load, self.SAVE_DATA_DIRECTORY)
-
-        # set path
-        traversed_path = save_data['traversedPath']
-        coordinates_list = [tracked_node['coordinates'] for tracked_node in traversed_path]
-        self.path_manager.set_path(coordinates_list, Cartesian.SYSTEM_NAME)
-
-        # force a refresh
-        self.refresh_ui()
-
-    def load_added_obstacles_command(self):
-
-        # load the data
-        save_data: dict = utils.read_file_as_json(self.save_to_load, self.SAVE_DATA_DIRECTORY)
-
-        # create grid of added obstacles
-        added_obstacles_list = save_data['addedObstacles']
-        added_obstacles_grid = np.zeros(self.path_manager.terrain_model.shape)
-        for coordinates in added_obstacles_list:
-            added_obstacles_grid[coordinates[0], coordinates[1]] = 1
-
-        # create image to draw grid
-        masked = np.ma.masked_array(added_obstacles_grid, np.logical_not(added_obstacles_grid))
-        self.added_obstacles_img = self.sub_plot.imshow(masked, alpha=0.5, cmap='bwr')
-
-        # redraw
-        self.redraw_canvas()
-
-        # force refresh
-        self.refresh_ui()
-
-    def load_removed_obstacles_command(self):
-        pass
-
-    def clear_loaded_obstacles_command(self):
-
-        # clear the image
-        if self.added_obstacles_img:
-            self.added_obstacles_img.remove()
-            self.added_obstacles_img = None
-
-        # redraw
-        self.redraw_canvas()
-
-        # force refresh
-        self.refresh_ui()
-
-    def refresh_load_data_cell(self, cell: BannerCell):
-
-        load_path_btn = cell.widgets["load_path_btn"]
-        load_added_btn = cell.widgets["load_added_btn"]
-        load_removed_btn = cell.widgets["load_removed_btn"]
-        clear_btn = cell.widgets["clear_btn"]
-
-        # standard configuration
-        load_path_btn['state'] = tk.DISABLED
-        load_added_btn['state'] = tk.DISABLED
-        load_removed_btn['state'] = tk.DISABLED
-        clear_btn['state'] = tk.DISABLED
-
-        # READY
-        if self.state == PageFindPath.STATE_READY:
-
-            # enable / disable buttons based on existence of parameters
-            load_path_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
-            load_added_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
-            load_removed_btn['state'] = tk.DISABLED if not self.path_manager.terrain_model else tk.NORMAL
-
-            if self.path_manager.terrain_model and self.added_obstacles_img:
-                clear_btn['state'] = tk.NORMAL
-            else:
-                clear_btn['state'] = tk.DISABLED
 
     '''=======================================
     DRAWING

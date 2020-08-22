@@ -53,10 +53,10 @@ class AppStateManager:
         # COMPONENTS
         # path manager (threaded if gui will be used)
         self.path_manager = PathManager(self, threaded=create_gui)
-        FeatureBroker.instance().provide("path_manager", self.path_manager)
+        FeatureBroker.instance().provide("path_manager", self.path_manager)  # dependency injection
         # server
         self.server = Server(HOST_NAME, HOST_PORT, self)
-        FeatureBroker.instance().provide("server", self.server)
+        FeatureBroker.instance().provide("server", self.server)  # dependency injection
         # message manager
         self.message_manager = ClientMessageProcessor(self)
         # gui
