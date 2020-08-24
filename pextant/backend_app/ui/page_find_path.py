@@ -220,6 +220,7 @@ class PageFindPath(PageBase):
         self.model_to_load = ''
         self.max_slope = 10
         self.obstacle_radius = 5
+        self.loaded_scenario = ''
 
         # graph references
         self.blitted_texture = None
@@ -375,7 +376,10 @@ class PageFindPath(PageBase):
     APP EVENT HANDLERS
     ======================================='''
 
-    def on_scenario_loaded(self, terrain_model, start_point, end_point, initial_heading):
+    def on_scenario_loaded(self, scenario_name, terrain_model, start_point, end_point, initial_heading):
+
+        # set loaded scenario
+        self.loaded_scenario = scenario_name
 
         self.on_model_loaded(terrain_model)
         self.on_start_point_set(start_point)
@@ -404,6 +408,9 @@ class PageFindPath(PageBase):
         self.state = PageFindPath.STATE_READY
 
     def on_model_unloaded(self):
+
+        # clear loaded scenario
+        self.loaded_scenario = ''
 
         # clear terrain/images
         if self.model_img:
@@ -520,6 +527,9 @@ class PageFindPath(PageBase):
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
 
+            # simulate an unload before a new load
+            self.on_model_unloaded()
+
             # note that we're loading
             self.state = PageFindPath.STATE_LOADING_SCENARIO
 
@@ -531,25 +541,31 @@ class PageFindPath(PageBase):
 
     def load_scenario_endpoints_command(self):
 
-        # if we're not doing anything else
-        if self.state == PageFindPath.STATE_READY:
+        # only load endpoints for an already-loaded scenario
+        if self.loaded_scenario == self.scenario_to_load:
 
-            # issue load endpoints request
-            EventDispatcher.instance().trigger_event(
-                event_definitions.SCENARIO_LOAD_ENDPOINTS_REQUESTED,
-                self.scenario_to_load
-            )
+            # if we're not doing anything else
+            if self.state == PageFindPath.STATE_READY:
+
+                # issue load endpoints request
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.SCENARIO_LOAD_ENDPOINTS_REQUESTED,
+                    self.scenario_to_load
+                )
 
     def load_scenario_obstacles_command(self):
 
-        # if we're not doing anything else
-        if self.state == PageFindPath.STATE_READY:
+        # only load endpoints for an already-loaded scenario
+        if self.loaded_scenario == self.scenario_to_load:
 
-            # issue load model request
-            EventDispatcher.instance().trigger_event(
-                event_definitions.SCENARIO_LOAD_OBSTACLE_REQUEST,
-                self.scenario_to_load
-            )
+            # if we're not doing anything else
+            if self.state == PageFindPath.STATE_READY:
+
+                # issue load model request
+                EventDispatcher.instance().trigger_event(
+                    event_definitions.SCENARIO_LOAD_OBSTACLE_REQUEST,
+                    self.scenario_to_load
+                )
 
     def refresh_load_scenario_cell(self, cell: BannerCell):
 
@@ -614,24 +630,18 @@ class PageFindPath(PageBase):
         # if we're not doing anything else
         if self.state == PageFindPath.STATE_READY:
 
-            # if we don't have a model
-            if not self.path_manager.terrain_model:
+            # simulate an unload before a new load
+            self.on_model_unloaded()
 
-                # note that we're loading
-                self.state = PageFindPath.STATE_LOADING_MODEL
+            # note that we're loading
+            self.state = PageFindPath.STATE_LOADING_MODEL
 
-                # issue load model request
-                EventDispatcher.instance().trigger_event(
-                    event_definitions.MODEL_LOAD_REQUESTED,
-                    self.model_to_load,
-                    self.max_slope
-                )
-
-            # otherwise (already have model)
-            else:
-
-                # issue unload model request
-                EventDispatcher.instance().trigger_event(event_definitions.MODEL_UNLOAD_REQUESTED)
+            # issue load model request
+            EventDispatcher.instance().trigger_event(
+                event_definitions.MODEL_LOAD_REQUESTED,
+                self.model_to_load,
+                self.max_slope
+            )
 
     def refresh_load_model_cell(self, cell: BannerCell):
 
@@ -639,7 +649,7 @@ class PageFindPath(PageBase):
 
         # standard configuration
         btn['state'] = tk.DISABLED
-        btn['text'] = "Load" if not self.path_manager.terrain_model else "Unload"
+        btn['text'] = "Load"
 
         # READY
         if self.state == PageFindPath.STATE_READY:

@@ -154,7 +154,7 @@ class ClientMessageProcessor(AppComponent):
     '''=======================================
     EVENT HANDLERS
     ======================================='''
-    def on_scenario_loaded(self, terrain_model, start_point, end_point, initial_heading):
+    def on_scenario_loaded(self, scenario_name, terrain_model, start_point, end_point, initial_heading):
 
         # model
         elevations = terrain_model.data.tolist()

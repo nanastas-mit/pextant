@@ -162,6 +162,7 @@ class PathManager(AppComponent):
         # all done! dispatch event
         EventDispatcher.instance().trigger_event(
             event_definitions.SCENARIO_LOAD_COMPLETE,
+            scenario_to_load,
             self.terrain_model,
             self.start_point,
             self.end_point,
@@ -268,7 +269,10 @@ class PathManager(AppComponent):
 
         # dispatch loaded event
         if dispatch_completed_event:
-            EventDispatcher.instance().trigger_event(event_definitions.MODEL_LOAD_COMPLETE, self.terrain_model)
+            EventDispatcher.instance().trigger_event(
+                event_definitions.MODEL_LOAD_COMPLETE,
+                self.terrain_model
+            )
 
     def unload_model(self):
         """Unload (and clear cache) of whatever model is in memory"""
