@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import numpy.matlib as matlib
+from pextant.lib.geoshapely import GeoPoint, GeoPolygon, GeoEnvelope, Cartesian, XY
 from scipy.interpolate import NearestNDInterpolator, RegularGridInterpolator
 from scipy.ndimage.interpolation import zoom
 from skimage.draw import circle
